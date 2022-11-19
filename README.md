@@ -6,6 +6,8 @@ Currently there is only support for brightness control using the 8Ch Dimmer.
 
 Lighting channels must be assigned to a scene in order to be discovered.
 
+The state of this component is: Local Polling
+
 ## Installation
 ### Adding the eDIN+ Component to Home Assistant
 The **edinplus.py** files need to be placed in the installation directory of Home Assistant. For me this is
