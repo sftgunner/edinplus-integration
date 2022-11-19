@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 import requests
 
-from .edinplus import EdinPlusLightChannelInstance,EdinPlusDiscoverChannels
+from .edinplus import edinplus_dimmer_channel_instance
 import voluptuous as vol
 
 from pprint import pformat
@@ -20,27 +20,42 @@ from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
 _LOGGER = logging.getLogger("edinplus")
 
-# Validation of the user's configuration
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
-    vol.Optional(CONF_NAME): cv.string,
-    vol.Required(CONF_IP_ADDRESS): cv.string,
-})
+# # Validation of the user's configuration
+# PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
+#     vol.Optional(CONF_NAME): cv.string,
+#     vol.Required(CONF_IP_ADDRESS): cv.string,
+# })
 
 
-async def async_setup_platform(
+# async def async_setup_platform(
+#     hass: HomeAssistant,
+#     config: ConfigType,
+#     add_entities: AddEntitiesCallback,
+#     discovery_info: DiscoveryInfoType | None = None
+# ) -> None:
+#     """Set up the eDIN+ Light platform."""
+#     # Add devices
+#     _LOGGER.info(pformat(config))
+
+#     channels = await EdinPlusDiscoverChannels(config[CONF_IP_ADDRESS])
+
+#     for channel in channels:
+#         add_entities([EdinPlusLightChannel(channel)])
+
+# This function is called as part of the __init__.async_setup_entry (via the
+# hass.config_entries.async_forward_entry_setup call)
+async def async_setup_entry(
     hass: HomeAssistant,
-    config: ConfigType,
-    add_entities: AddEntitiesCallback,
-    discovery_info: DiscoveryInfoType | None = None
+    config_entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the eDIN+ Light platform."""
-    # Add devices
-    _LOGGER.info(pformat(config))
+    """Add cover for passed config_entry in HA."""
+    # The hub is loaded from the associated hass.data entry that was created in the
+    # __init__.async_setup_entry function
+    npu = hass.data["edinplus"][config_entry.entry_id]
 
-    channels = await EdinPlusDiscoverChannels(config[CONF_IP_ADDRESS])
-
-    for channel in channels:
-        add_entities([EdinPlusLightChannel(channel)])
+    # Add all entities to HA
+    async_add_entities(EdinPlusLightChannel(light) for light in npu.lights)
 
 class EdinPlusLightChannel(LightEntity):
     """Representation of an Edin Light Channel."""
@@ -48,9 +63,11 @@ class EdinPlusLightChannel(LightEntity):
     def __init__(self, light) -> None:
         """Initialize an eDIN+ Light Channel."""
         _LOGGER.info(pformat(light))
-        self._light = EdinPlusLightChannelInstance(light["hostname"],light["address"],light["channel"])
-        self._name = light["name"]
-        self._unique_id = "edinpluscustomuuid-"+str(light["address"])+"-"+str(light["channel"])
+        #self._light = edinplus_dimmer_channel_instance(light["hostname"],light["address"],light["channel"])
+        self._light = light
+        #self._name = light["name"]
+        self._name = self._light.name
+        self._unique_id = "edinpluscustomuuid-"+str(self._light._dimmer_address)+"-"+str(self._light._channel)
         self._state = None
         self._brightness = None
 

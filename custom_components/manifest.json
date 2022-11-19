@@ -1,9 +1,10 @@
 {
     "domain": "edinplus",
-    "name": "Edin+",
+    "name": "eDIN+",
     "integration_type": "hub",
-    "requirements": ["grequests==0.6.0"],
+    "requirements": [],
     "codeowners": ["@sftgunner"],
     "iot_class": "assumed_state",
-    "version": "0.1.0"
+    "version": "0.2.0",
+    "config_flow": true
 }
