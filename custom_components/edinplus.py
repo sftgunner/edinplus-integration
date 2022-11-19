@@ -64,11 +64,11 @@ class EdinPlusLightChannelInstance:
     #def get_brightness(self):
         
 
-def EdinPlusDiscoverChannels(hostname):
+async def EdinPlusDiscoverChannels(hostname):
     
     edinEndpoint = f"http://{hostname}/gateway?1" #NB although the 1 doesn't exist in the Edin+ API spec, it's the only way to stop requests from stripping it completely (which results in /gateway, a 404)
 
-    areaList = send_to_npu(edinEndpoint,"?AREANAMES;")
+    areaList = await async_send_to_npu(edinEndpoint,"?AREANAMES;")
 
     LOGGER.debug(areaList)
 
@@ -93,14 +93,14 @@ def EdinPlusDiscoverChannels(hostname):
     for areaIdx in range(0,len(areaIDs)):
         LOGGER.debug(f"AREA ID {areaIDs[areaIdx]} - {areaNames[areaIdx]}")
         # Get a list of all scene names that apply to this area
-        sceneList = send_to_npu(edinEndpoint,f"?SCNNAMES,{areaIDs[areaIdx]};")
+        sceneList = await async_send_to_npu(edinEndpoint,f"?SCNNAMES,{areaIDs[areaIdx]};")
         sceneIDs = []
         for sceneIdx in range(1,len(sceneList)):
             currentScene = str(sceneList[sceneIdx]).split(",")
             sceneIDs.append(currentScene[1]);
         LOGGER.debug(sceneIDs)
         for sceneID in sceneIDs:
-            channelList = send_to_npu(edinEndpoint,f"?SCNCHANNAMES,{sceneID};")
+            channelList = await async_send_to_npu(edinEndpoint,f"?SCNCHANNAMES,{sceneID};")
             LOGGER.debug(channelList)
             for channelIdx in range(1,len(channelList)):
                 currentChannel = str(channelList[channelIdx]).split(",")

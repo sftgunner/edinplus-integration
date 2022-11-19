@@ -27,18 +27,18 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
 })
 
 
-def setup_platform(
+async def async_setup_platform(
     hass: HomeAssistant,
     config: ConfigType,
     add_entities: AddEntitiesCallback,
     discovery_info: DiscoveryInfoType | None = None
 ) -> None:
-    """Set up the Edin Plus Light platform."""
+    """Set up the eDIN+ Light platform."""
     # Add devices
     _LOGGER.info(pformat(config))
 
-    channels = EdinPlusDiscoverChannels(config[CONF_IP_ADDRESS])
-    
+    channels = await EdinPlusDiscoverChannels(config[CONF_IP_ADDRESS])
+
     for channel in channels:
         add_entities([EdinPlusLightChannel(channel)])
 
@@ -46,7 +46,7 @@ class EdinPlusLightChannel(LightEntity):
     """Representation of an Edin Light Channel."""
 
     def __init__(self, light) -> None:
-        """Initialize an EdinPlus Light Channel."""
+        """Initialize an eDIN+ Light Channel."""
         _LOGGER.info(pformat(light))
         self._light = EdinPlusLightChannelInstance(light["hostname"],light["address"],light["channel"])
         self._name = light["name"]
