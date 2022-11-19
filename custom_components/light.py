@@ -82,19 +82,19 @@ class EdinPlusLightChannel(LightEntity):
         """Return true if light is on."""
         return self._state
 
-    def turn_on(self, **kwargs: Any) -> None:
+    async def async_turn_on(self, **kwargs: Any) -> None:
         """Instruct the light to turn on."""
         _LOGGER.debug("Attempting light turn on")
         
         if ATTR_BRIGHTNESS in kwargs:
-            self._light.set_brightness(kwargs.get(ATTR_BRIGHTNESS, 255))
+            await self._light.set_brightness(kwargs.get(ATTR_BRIGHTNESS, 255))
 
         else:
-            self._light.turn_on()
+            await self._light.turn_on()
 
-    def turn_off(self, **kwargs: Any) -> None:
+    async def async_turn_off(self, **kwargs: Any) -> None:
         """Instruct the light to turn off."""
-        self._light.turn_off()
+        await self._light.turn_off()
 
     def update(self) -> None:
         """Fetch new state data for this light.
