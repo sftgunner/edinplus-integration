@@ -127,10 +127,15 @@ class EdinPlusLightChannel(LightEntity):
         """Instruct the light to turn off."""
         await self._light.turn_off()
 
-    def update(self) -> None:
+    async def async_update(self) -> None:
         """Fetch new state data for this light.
 
         This is the only method that should fetch new data for Home Assistant.
         """
-        self._state = self._light.is_on
-        self._brightness = self._light.brightness
+        self._brightness = await self._light.get_brightness()
+        if int(self._brightness) > 0:
+            self._state = True
+        else:
+            self._state = False
+        #self._state = self._light.is_on
+        #self._brightness = self._light.brightness
