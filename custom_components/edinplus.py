@@ -28,9 +28,12 @@ class edinplus_NPU_instance:
         LOGGER.debug("Initialising NPU")
         self._hostname = hostname
         self._hass = hass
+        self._name = hostname
+        self._id = "edinpluscustomuuid-hub-"+hostname.lower()
         #NB although the 1 doesn't exist in the Edin+ API spec for endpoint, it's the only way to stop requests from stripping it completely (which results in /gateway, a 404)
         self._endpoint = f"http://{hostname}/gateway?1"
         self.lights = []
+        self.manufacturer = "Mode Lighting"
     
     async def discover(self):
         self.lights = await self.EdinPlusDiscoverChannels()
@@ -77,28 +80,33 @@ class edinplus_NPU_instance:
                         LOGGER.debug(f"Already found channel {currentChannel[3]}. Not reassigning room")
                     else:
                         #channels.append({"name":f"{areaNames[areaIdx]} {currentChannel[6][:-1]}","address":currentChannel[1],"channel":currentChannel[3],"hostname":hostname})
-                        dimmer_channel_instances.append(edinplus_dimmer_channel_instance(currentChannel[1],currentChannel[3],f"{areaNames[areaIdx]} {currentChannel[6][:-1]}",self))
+                        dimmer_channel_instances.append(edinplus_dimmer_channel_instance(currentChannel[1],currentChannel[3],f"{areaNames[areaIdx]} {currentChannel[6][:-1]}",f"{areaNames[areaIdx]}",self))
                         foundChannelIdxs.append(currentChannel[3])
 
         return dimmer_channel_instances
 
 class edinplus_dimmer_channel_instance:
-    def __init__(self, address:int, channel: int, name: str, npu: edinplus_NPU_instance) -> None:
+    def __init__(self, address:int, channel: int, name: str, area: str, npu: edinplus_NPU_instance) -> None:
         LOGGER.debug("Test message")
         self._dimmer_address = address
         self._channel = channel
+        self._id = "edinpluscustomuuid-"+str(self._dimmer_address)+"-"+str(self._channel)
         self.name = name
-        #self._hostname = hostname
         self.hub = npu
-        #NB although the 1 doesn't exist in the Edin+ API spec for endpoint, it's the only way to stop requests from stripping it completely (which results in /gateway, a 404)
-        #self._endpoint = f"http://{hostname}/gateway?1" 
         self._is_on = None
         self._connected = True #Hacked together
         self._brightness = None
+        self.model = "DIN Dimmer (8Chx2A)"
+        self.area = area
 
     @property
     def channel(self):
         return self._channel
+
+    @property
+    def light_id(self) -> str:
+        """Return ID for light."""
+        return self._id
 
     # @property
     # def hostname(self):

@@ -11,6 +11,7 @@ from pprint import pformat
 
 # Import the device class from the component that you want to support
 import homeassistant.helpers.config_validation as cv
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.components.light import (SUPPORT_BRIGHTNESS, ATTR_BRIGHTNESS,
                                             PLATFORM_SCHEMA, LightEntity)
 from homeassistant.const import CONF_NAME, CONF_IP_ADDRESS
@@ -66,20 +67,33 @@ class EdinPlusLightChannel(LightEntity):
         #self._light = edinplus_dimmer_channel_instance(light["hostname"],light["address"],light["channel"])
         self._light = light
         #self._name = light["name"]
-        self._name = self._light.name
-        self._unique_id = "edinpluscustomuuid-"+str(self._light._dimmer_address)+"-"+str(self._light._channel)
+        self._attr_name = self._light.name
+        self._attr_unique_id = f"{self._light.light_id}_light"
+        #self._unique_id = "edinpluscustomuuid-"+str(self._light._dimmer_address)+"-"+str(self._light._channel)
         self._state = None
         self._brightness = None
 
-    @property
-    def name(self) -> str:
-        """Return the display name of this light."""
-        return self._name
+    # @property
+    # def name(self) -> str:
+    #     """Return the display name of this light."""
+    #     return self._name
 
     @property
-    def unique_id(self) -> str:
-        """Return the unique identifier for this light."""
-        return self._unique_id
+    def device_info(self) -> DeviceInfo:
+        """Return the device info"""
+        return {
+        "identifiers": {("edinplus",self._light.light_id)},
+            "name": self.name,
+            "sw_version": "1.0.0",
+            "model": self._light.model,
+            "manufacturer": self._light.hub.manufacturer,
+            "suggested_area": self._light.area,
+        }
+
+    # @property
+    # def unique_id(self) -> str:
+    #     """Return the unique identifier for this light."""
+    #     return self._unique_id
 
     @property
     def brightness(self):
