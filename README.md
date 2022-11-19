@@ -22,7 +22,7 @@ There are instructions to follow on the instructions on the home-assistant websi
 
 To setup the eDIN+ component, first ensure homeassistant has been rebooted. Then add the integration through the integrations page https://{ip}:8123/config/integrations as you normally would. 
 
-Currently it will prompt for data input without any explaining text - this is the hostname or IP address of the eDIN+ NPU (network processing unit). 
+Currently it will prompt for data input without any explanation text - this is the hostname or IP address of the eDIN+ NPU (network processing unit). 
 
 Please ensure it is in the format: "192.168.1.100" (excluding quotes). 
 
@@ -36,3 +36,11 @@ More information about the eDIN+ system can be found on Mode Lighting's website:
 If you find any bugs, please feel free to submit an issue, pull request or just fork this repo and improve it yourself!
 
 If opening an issue, please could you also include any detail from the HomeAssistant logs (if there are any!): https://{ip}:8123/config/logs just search for "edinplus" on this page: and any error messages should appear (click on them for more detail).
+
+## Next priorities
+
+The current priorities are:
+- Adding DMX compatibility
+- Getting contact module inputs working (unsure how to get this to work with local polling)
+- Adding keypad support (input and RGB outputs)
+
