@@ -1,4 +1,4 @@
-# Genius Hub Component (Platform) for Home Assistant
+# eDIN+ Component (Platform) for Home Assistant
 
 Tested on HA 2022.11.3 and eDIN+ firmware SW00120.2.4.1.44
 
