@@ -37,7 +37,7 @@ More information about the eDIN+ system can be found on Mode Lighting's website:
 
 If you find any bugs, please feel free to submit an issue, pull request or just fork this repo and improve it yourself!
 
-If opening an issue, please could you also include any detail from the HomeAssistant logs (if there are any!): https://{ip}:8123/config/logs just search for "edinplus" on this page: and any error messages should appear (click on them for more detail).
+If opening an issue, please could you also include any detail from the HomeAssistant logs (if there are any!): just search for "edinplus" on this page: https://{ip}:8123/config/logs and any error messages should appear (click on them for more detail).
 
 ## Next priorities
 
