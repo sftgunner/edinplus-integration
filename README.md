@@ -42,7 +42,9 @@ If opening an issue, please could you also include any detail from the HomeAssis
 ## Next priorities
 
 The current priorities are:
-- Adding DMX compatibility
-- Getting contact module inputs working (unsure how to get this to work with local polling)
-- Adding keypad support (input and RGB outputs)
+ - Change the discovery method to use the /info endpoint
+ - Switch from polling using asynchronous HTTP requests to instead listen to the socket stream
+ - Add the input modules as entities and add inputs as triggers
+ - Add support for passing the scenes in eDIN+ to HomeAssistant so scenes can be used in automations rather than overriding channels
+ - Ensure the integration is robust (with proper error handling and aiming to satisfy all integration standards https://developers.home-assistant.io/docs/creating_component_code_review)
 
