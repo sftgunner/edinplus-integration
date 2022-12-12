@@ -7,18 +7,19 @@ from homeassistant.core import HomeAssistant
 from . import edinplus
 
 # List of platforms to support. There should be a matching .py file for each,
-# eg <cover.py> and <sensor.py>
+# eg <light.py> and <sensor.py>
 PLATFORMS: list[str] = ["light"]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Hello World from a config entry."""
+    """Set up NPU from config entry."""
     # Store an instance of the "connecting" class that does the work of speaking
     # with your actual devices.
     hub = edinplus.edinplus_NPU_instance(hass, entry.data["host"])
 
     hass.data.setdefault("edinplus", {})[entry.entry_id] = hub
-    # Make sure we get all the lights
+
+    # Ensure that all the devices are up to date on initialisation
     await hub.discover()
 
     # This creates each HA object for each platform your device requires.

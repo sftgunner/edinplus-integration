@@ -1,0 +1,21 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "data": {
+                "host": "Hostname (IP address)",
+                "username": "username",
+                "password": "password"
+                }
+            }
+        },
+        "error": {
+            "cannot_connect": "Cannot connect to device",
+            "invalid_auth": "Invalid authentication (username or password incorrect)",
+            "unknown": "An unknown error occurred"
+        },
+        "abort": {
+            "already_configured": "This device has already been configured"
+        }
+    }
+}
