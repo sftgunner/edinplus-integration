@@ -21,6 +21,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Ensure that all the devices are up to date on initialisation
     await hub.discover()
+    # Initialise the TCP connection to the hub
+    await hub.async_tcp_connect()
+    # Monitor the TCP connection for any changes
+    await hub.monitor(hass)
 
     # This creates each HA object for each platform your device requires.
     # It's done by calling the `async_setup_entry` function in each platform module.

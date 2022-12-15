@@ -5,6 +5,9 @@ import logging
 from homeassistant.core import HomeAssistant
 
 import aiohttp
+import datetime
+
+from homeassistant.helpers.event import async_track_time_interval
 
 LOGGER = logging.getLogger(__name__)
 
@@ -42,6 +45,13 @@ DEVCODE_TO_PRODNAME = {
     144: "eDIN 5A 4 channel mains sync relay module",
     145: "eDIN Universal Ballast Control 2 module",
 }
+NEWSTATE_TO_BUTTONEVENT = {
+    0: "Release-off",
+    1: "Press-on",
+    2: "Hold-on",
+    5: "Short-press",
+    6: "Hold-off"
+}
 
 def send_to_npu(endpoint,data):
     response = requests.post(endpoint, data = data)
@@ -64,6 +74,16 @@ async def async_retrieve_from_npu(endpoint):
             response = await resp.text()
     return response.splitlines()
 
+async def tcp_send_message(message,writer):
+    print(f'Send: {message!r}')
+    writer.write(message.encode())
+    await writer.drain()
+
+async def tcp_recieve_message(reader):
+    data = await reader.readline()
+    #print(f'Received: {data.decode()!r}')
+    return data.decode()
+
 class edinplus_NPU_instance:
     def __init__(self,hass: HomeAssistant,hostname:str) -> None:
         LOGGER.debug("Initialising NPU")
@@ -75,9 +95,48 @@ class edinplus_NPU_instance:
         self._endpoint = f"http://{hostname}/gateway?1"
         self.lights = []
         self.manufacturer = "Mode Lighting"
+        self.reader = None
+        self.writer = None
+        self.readlock = False
     
     async def discover(self):
         self.lights = await self.async_edinplus_discover_channels()
+
+    async def async_tcp_connect(self):
+        reader, writer = await asyncio.open_connection(self._hostname, 26)
+        self.reader = reader
+        self.writer = writer
+        await tcp_send_message('$EVENTS,1;',writer)
+        output = await tcp_recieve_message(reader)
+        LOGGER.warning(output)
+    
+    async def async_monitor_tcp(self,now=None):
+        if self.readlock:
+            LOGGER.debug("Unable to read as coroutine already in progress")
+        else:
+            # LOGGER.warning("Monitoring")
+            self.readlock = True
+            response = await tcp_recieve_message(self.reader)
+            self.readlock = False
+            if response != "":
+                # Parse response and determine what to do with it
+                if response.split(',')[0] == "!INPSTATE":
+                    #It's a button press - fire a custom event!
+                    edinplus_event = {}
+                    edinplus_event['address'] = int(response.split(',')[1])
+                    edinplus_event['device'] = DEVCODE_TO_PRODNAME[int(response.split(',')[2])]
+                    edinplus_event['channel'] = int(response.split(',')[3])
+                    edinplus_event['newstate'] = int(response.split(',')[4].split(';')[0])
+                    edinplus_event['newstate_desc'] = NEWSTATE_TO_BUTTONEVENT[edinplus_event['newstate']]
+                    edinplus_event['description'] = "Change in switched input"
+                    edinplus_event['raw'] = response
+                    self._hass.bus.fire("edinplus_event", edinplus_event)
+                LOGGER.warning(response)
+            else:
+                LOGGER.warning("No response")
+
+    async def monitor(self, hass: HomeAssistant) -> None:
+        async_track_time_interval(hass,self.async_monitor_tcp, datetime.timedelta(seconds=0.01))
 
 
     async def async_edinplus_discover_channels(self):
