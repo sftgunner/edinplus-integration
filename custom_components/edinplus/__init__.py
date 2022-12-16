@@ -22,12 +22,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.data.setdefault("edinplus", {})[entry.entry_id] = hub
 
-    # Ensure that all the devices are up to date on initialisation
-    await hub.discover()
-    LOGGER.debug("Completed discover")
+
     # Initialise the TCP connection to the hub
     await hub.async_tcp_connect()
     LOGGER.debug("Completed TCP connect")
+    # Ensure that all the devices are up to date on initialisation
+    await hub.discover()
+    LOGGER.debug("Completed discover")
     # Monitor the TCP connection for any changes
     await hub.monitor(hass)
     LOGGER.debug("Completed monitor")

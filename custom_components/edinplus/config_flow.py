@@ -12,6 +12,9 @@ from homeassistant.core import HomeAssistant
 #from .const import DOMAIN  # pylint:disable=unused-import
 from .edinplus import edinplus_NPU_instance
 
+# Import constants
+from .const import DOMAIN
+
 _LOGGER = logging.getLogger(__name__)
 
 # This is the schema that used to display the UI to the user.
