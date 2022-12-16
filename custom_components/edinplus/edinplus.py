@@ -74,8 +74,8 @@ async def async_retrieve_from_npu(endpoint):
             response = await resp.text()
     return response.splitlines()
 
-async def tcp_send_message(message,writer):
-    print(f'Send: {message!r}')
+async def tcp_send_message(writer,message):
+    # print(f'Send: {message!r}')
     writer.write(message.encode())
     await writer.drain()
 
@@ -98,6 +98,7 @@ class edinplus_NPU_instance:
         self.reader = None
         self.writer = None
         self.readlock = False
+        LOGGER.debug("Initialised NPU instance (in edinplus.py)")
     
     async def discover(self):
         self.lights = await self.async_edinplus_discover_channels()
@@ -106,13 +107,15 @@ class edinplus_NPU_instance:
         reader, writer = await asyncio.open_connection(self._hostname, 26)
         self.reader = reader
         self.writer = writer
-        await tcp_send_message('$EVENTS,1;',writer)
-        output = await tcp_recieve_message(reader)
+        # Register to recieve events
+        await tcp_send_message(self.writer,'$EVENTS,1;')
+        output = await tcp_recieve_message(self.reader)
         LOGGER.warning(output)
     
     async def async_monitor_tcp(self,now=None):
         if self.readlock:
-            LOGGER.debug("Unable to read as coroutine already in progress")
+            # LOGGER.debug("Unable to read as coroutine already in progress")
+            pass
         else:
             # LOGGER.warning("Monitoring")
             self.readlock = True
@@ -121,7 +124,7 @@ class edinplus_NPU_instance:
             if response != "":
                 # Parse response and determine what to do with it
                 if response.split(',')[0] == "!INPSTATE":
-                    #It's a button press - fire a custom event!
+                    #It's a contact module press - fire a custom event!
                     edinplus_event = {}
                     edinplus_event['address'] = int(response.split(',')[1])
                     edinplus_event['device'] = DEVCODE_TO_PRODNAME[int(response.split(',')[2])]
@@ -131,7 +134,18 @@ class edinplus_NPU_instance:
                     edinplus_event['description'] = "Change in switched input"
                     edinplus_event['raw'] = response
                     self._hass.bus.fire("edinplus_event", edinplus_event)
-                LOGGER.warning(response)
+                elif response.split(',')[0] == "!BTNSTATE":
+                    #It's a keypad module press - fire a custom event!
+                    edinplus_event = {}
+                    edinplus_event['address'] = int(response.split(',')[1])
+                    edinplus_event['device'] = DEVCODE_TO_PRODNAME[int(response.split(',')[2])]
+                    edinplus_event['channel'] = int(response.split(',')[3])
+                    edinplus_event['newstate'] = int(response.split(',')[4].split(';')[0])
+                    edinplus_event['newstate_desc'] = NEWSTATE_TO_BUTTONEVENT[edinplus_event['newstate']]
+                    edinplus_event['description'] = "Change in button switch state"
+                    edinplus_event['raw'] = response
+                    self._hass.bus.fire("edinplus_event", edinplus_event)
+                LOGGER.info(response)
             else:
                 LOGGER.warning("No response")
 
@@ -162,7 +176,7 @@ class edinplus_NPU_instance:
             channel_entity['area'] = areas[int(channel.split(',')[4])]
             channel_entity['model'] = DEVCODE_TO_PRODNAME[int(channel.split(',')[2])]
             #print(channel_entity)
-            dimmer_channel_instances.append(edinplus_dimmer_channel_instance(channel_entity['address'],channel_entity['channel'],channel_entity['name'],channel_entity['area'],channel_entity['model'],self))
+            dimmer_channel_instances.append(edinplus_dimmer_channel_instance(channel_entity['address'],channel_entity['channel'],f"{channel_entity['area']} {channel_entity['name']}",channel_entity['area'],channel_entity['model'],self))
 
         inputs_csv = [idx for idx in NPU_data if idx.startswith("INPSTATE")]
         for input in inputs_csv:
@@ -173,7 +187,7 @@ class edinplus_NPU_instance:
             input_entity['name'] = input.split(',')[5]
             input_entity['area'] = areas[int(input.split(',')[4])]
             input_entity['model'] = DEVCODE_TO_PRODNAME[int(input.split(',')[2])]
-            LOGGER.debug(f"Have found input entity {input_entity['name']} in room {input_entity['area']} but support for inputs has not been added yet.")
+            LOGGER.info(f"Have found input entity {input_entity['name']} in room {input_entity['area']} but support for inputs has not been added yet.")
             # INPUT ENTITIES CURRENTLY DISABLED
             #print(input_entity)
             #dimmer_channel_instances.append(edinplus_dimmer_channel_instance(channel_entity['address'],channel_entity['channel'],channel_entity['name'],channel_entity['area'],channel_entity['model'],self))
@@ -182,7 +196,7 @@ class edinplus_NPU_instance:
 
 class edinplus_dimmer_channel_instance:
     def __init__(self, address:int, channel: int, name: str, area: str, model: str, npu: edinplus_NPU_instance) -> None:
-        LOGGER.debug("Test message")
+        LOGGER.debug("Initialising dimmer channel instance")
         self._dimmer_address = address
         self._channel = channel
         self._id = "edinpluscustomuuid-"+str(self._dimmer_address)+"-"+str(self._channel)
@@ -216,15 +230,18 @@ class edinplus_dimmer_channel_instance:
         return self._brightness
 
     async def set_brightness(self, intensity: int):
-        await async_send_to_npu(self.hub._endpoint,f"$ChanFade,{self._dimmer_address},12,{self._channel},{str(intensity)},0;")
+        #await async_send_to_npu(self.hub._endpoint,f"$ChanFade,{self._dimmer_address},12,{self._channel},{str(intensity)},0;")
+        await tcp_send_message(self.hub.writer,f"$ChanFade,{self._dimmer_address},12,{self._channel},{str(intensity)},0;")
         self._brightness = intensity
 
     async def turn_on(self):
-        await async_send_to_npu(self.hub._endpoint,f"$ChanFade,{self._dimmer_address},12,{self._channel},255,0;")
+        #await async_send_to_npu(self.hub._endpoint,f"$ChanFade,{self._dimmer_address},12,{self._channel},255,0;")
+        await tcp_send_message(self.hub.writer,f"$ChanFade,{self._dimmer_address},12,{self._channel},255,0;")
         self._is_on = True
 
     async def turn_off(self):
-        await async_send_to_npu(self.hub._endpoint,f"$ChanFade,{self._dimmer_address},12,{self._channel},0,0;")
+        #await async_send_to_npu(self.hub._endpoint,f"$ChanFade,{self._dimmer_address},12,{self._channel},0,0;")
+        await tcp_send_message(self.hub.writer,f"$ChanFade,{self._dimmer_address},12,{self._channel},0,0;")
         self._is_on = False
     
     async def get_brightness(self):
