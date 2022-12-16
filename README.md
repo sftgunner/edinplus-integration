@@ -4,9 +4,11 @@ Tested on HA 2022.11.3 and eDIN+ firmware SW00120.2.4.1.44
 
 Currently there is only support for brightness control using the 8Ch Dimmer.
 
-Lighting channels must be assigned to a scene in order to be discovered.
+The state of this component is: Local Push
 
-The state of this component is: Local Polling
+This component currently communicates with the NPU over a combination of HTTP and TCP using port 26 (not currently configurable)
+
+Inputs currently trigger "edinplus_events" that can be used for automation
 
 ## Installation
 ### Adding the eDIN+ Component to Home Assistant
@@ -42,8 +44,5 @@ If opening an issue, please could you also include any detail from the HomeAssis
 ## Next priorities
 
 The current priorities are:
- - Change the discovery method to use the /info endpoint
- - Switch from polling using asynchronous HTTP requests to instead listen to the socket stream
  - Add the input modules as entities and add inputs as triggers
- - Add support for passing the scenes from eDIN+ to HomeAssistant so scenes can be used in automations rather than overriding channels
  - Ensure the integration is robust (with proper error handling and aiming to satisfy all integration standards https://developers.home-assistant.io/docs/creating_component_code_review)
