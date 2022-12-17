@@ -64,7 +64,7 @@ async def validate_input(hass: HomeAssistant, data: dict) -> dict[str, Any]:
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain="edinplus"):
-    """Handle a config flow for Hello World."""
+    """Handle a config flow for eDIN+."""
 
     VERSION = 1
     # Pick one of the available connection classes in homeassistant/config_entries.py

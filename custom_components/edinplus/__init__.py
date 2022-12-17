@@ -27,7 +27,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hub.async_tcp_connect()
     LOGGER.debug("Completed TCP connect")
     # Ensure that all the devices are up to date on initialisation
-    await hub.discover()
+    await hub.discover(entry)
     LOGGER.debug("Completed discover")
     # Monitor the TCP connection for any changes
     await hub.monitor(hass)

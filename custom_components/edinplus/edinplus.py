@@ -9,6 +9,8 @@ import aiohttp
 import datetime
 
 from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers import device_registry as dr
+from homeassistant.config_entries import ConfigEntry
 
 # Import constants
 from .const import *
@@ -58,6 +60,7 @@ class edinplus_NPU_instance:
         self._endpoint = f"http://{hostname}/gateway?1"
         self.lights = []
         self.manufacturer = "Mode Lighting"
+        self.model = "DIN-NPU-00-01-PLUS"
         self.reader = None
         self.writer = None
         self.readlock = False
@@ -67,8 +70,8 @@ class edinplus_NPU_instance:
         self.chan_to_scn_proxy = {}
         LOGGER.debug("Initialised NPU instance (in edinplus.py)")
     
-    async def discover(self):
-        self.lights = await self.async_edinplus_discover_channels()
+    async def discover(self,config_entry: ConfigEntry):
+        self.lights = await self.async_edinplus_discover_channels(config_entry)
         # Get the status for each light
         for light in self.lights:
             await light.tcp_force_state_inform()
@@ -166,7 +169,18 @@ class edinplus_NPU_instance:
         async_track_time_interval(hass,self.async_keep_tcp_alive, datetime.timedelta(minutes=30))
 
 
-    async def async_edinplus_discover_channels(self):
+    async def async_edinplus_discover_channels(self,config_entry: ConfigEntry,):
+
+        device_registry = dr.async_get(self._hass)
+        # Add the NPU into the device registry
+        device_registry.async_get_or_create(
+            config_entry_id = config_entry.entry_id,
+            identifiers={(DOMAIN, self._id)},
+            manufacturer=self.manufacturer,
+            name=f"NPU ({self._name})",
+            model=self.model,
+        )
+
         dimmer_channel_instances = []
         NPU_data = await async_retrieve_from_npu(f"http://{self._hostname}/info?what=names")
 
@@ -198,11 +212,22 @@ class edinplus_NPU_instance:
             input_entity = {}
             input_entity['address'] = int(input.split(',')[1])
             input_entity['channel'] = int(input.split(',')[3])
+            input_entity['id'] = f"edinpluscustomuuid-{input_entity['address']}-{input_entity['channel']}"
             input_entity['name'] = input.split(',')[5]
             input_entity['area'] = areas[int(input.split(',')[4])]
             input_entity['devcode'] = int(input.split(',')[2])
             input_entity['model'] = DEVCODE_TO_PRODNAME[input_entity['devcode']]
-            LOGGER.info(f"Have found input entity {input_entity['name']} in room {input_entity['area']} but support for inputs has not been added yet.")
+            # LOGGER.info(f"Have found input entity {input_entity['name']} in room {input_entity['area']} but support for inputs has not been added yet.")
+
+            device_registry.async_get_or_create(
+                config_entry_id = config_entry.entry_id,
+                identifiers={(DOMAIN, input_entity['id'])},
+                manufacturer=self.manufacturer,
+                name=f"Light switch ({input_entity['name']})",
+                suggested_area=input_entity['area'],
+                model=input_entity['model'],
+                via_device=(DOMAIN,self._id),
+            )
             # INPUT ENTITIES CURRENTLY DISABLED
             #print(input_entity)
             #dimmer_channel_instances.append(edinplus_dimmer_channel_instance(channel_entity['address'],channel_entity['channel'],channel_entity['name'],channel_entity['area'],channel_entity['model'],self))

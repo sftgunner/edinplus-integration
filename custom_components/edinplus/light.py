@@ -7,6 +7,7 @@ import logging
 import requests
 
 from .edinplus import edinplus_dimmer_channel_instance
+from .const import DOMAIN
 import voluptuous as vol
 
 from pprint import pformat
@@ -90,6 +91,7 @@ class EdinPlusLightChannel(LightEntity):
             "model": self._light.model,
             "manufacturer": self._light.hub.manufacturer,
             "suggested_area": self._light.area,
+            "via_device":(DOMAIN,self._light.hub._id),
         }
 
     # @property
