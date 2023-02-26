@@ -2,6 +2,7 @@ from __future__ import annotations
 import asyncio
 import requests
 import logging
+import time
 
 from homeassistant.core import HomeAssistant
 
@@ -40,11 +41,25 @@ async def async_retrieve_from_npu(endpoint):
     return response.splitlines()
 
 async def tcp_send_message(writer,message):
-    # print(f'Send: {message!r}')
+    LOGGER.debug(f'Sending: {message!r}')
     writer.write(message.encode())
     await writer.drain()
 
+async def tcp_send_message_plus(writer,reader,message):
+    LOGGER.debug(f'Sending_plus: {message!r}')
+    writer.write(message.encode())
+    await writer.drain()
+    # try:
+    #     async with asyncio.timeout(10):
+    #         data = await reader.readline()
+    #         LOGGER.debug(f'Acknowledgement: {data.decode()!r}')
+    #         # return data.decode()
+    # except TimeoutError:
+    #     print("ERR! Looks like NPU is offline: took more than 10 seconds to get a response.")
+    # self.readlock = False
+
 async def tcp_recieve_message(reader):
+    # if not reader.at_eof():
     data = await reader.readline()
     #print(f'Received: {data.decode()!r}')
     return data.decode()
@@ -55,6 +70,7 @@ class edinplus_NPU_instance:
         self._hostname = hostname
         self._hass = hass
         self._name = hostname
+        self._tcpport = 26
         self._id = "edinpluscustomuuid-hub-"+hostname.lower()
         #NB although the 1 doesn't exist in the Edin+ API spec for gateway endpoint, it's the only way to stop requests from stripping it completely (which results in /gateway, a 404)
         self._endpoint = f"http://{hostname}/gateway?1"
@@ -63,11 +79,15 @@ class edinplus_NPU_instance:
         self.model = "DIN-NPU-00-01-PLUS"
         self.reader = None
         self.writer = None
+        self.continuousTCPMonitor = None # For the coroutine task that monitors the TCP stream
         self.readlock = False
         self._callbacks = set()
         # This should be offered in config flow
         self._use_chan_to_scn_proxy = True
         self.chan_to_scn_proxy = {}
+        self.online = False
+        self.comms_retry_attempts = 0 
+        self.comms_max_retry_attempts = 5 # The number of retries before we try and re-establish the TCP connection
         LOGGER.debug("Initialised NPU instance (in edinplus.py)")
     
     async def discover(self,config_entry: ConfigEntry):
@@ -79,21 +99,67 @@ class edinplus_NPU_instance:
         self.chan_to_scn_proxy = await self.async_edinplus_map_chans_to_scns()
 
     async def async_tcp_connect(self):
-        reader, writer = await asyncio.open_connection(self._hostname, 26)
-        self.reader = reader
-        self.writer = writer
-        # Register to recieve all events
-        await tcp_send_message(self.writer,'$EVENTS,1;')
-        output = await tcp_recieve_message(self.reader)
-        # Output should be !GATRDY;
-        if output == "!GATRDY;":
-            LOGGER.info("TCP connection ready")
-        else:
-            LOGGER.warn(f"TCP connection not ready: {output}")    
+        LOGGER.debug(f"Establishing TCP connection to {self._hostname} on port {self._tcpport}")
+        try:
+            # openConnection = await asyncio.open_connection(self._hostname, 26)
+            # # Wait for 3 seconds, then raise TimeoutError
+            # reader, writer = await asyncio.wait_for(openConnection, timeout=3)
+            reader,writer = await asyncio.open_connection(self._hostname, self._tcpport)
+            self.online = True
+        except:
+            LOGGER.error(f"Unable to establish TCP connection to eDIN+. Check hostname '{self._hostname}' and that port {self._tcpport} is open.")
+            self.online = False
+        if self.online:
+            self.reader = reader
+            self.writer = writer
+            # Register to recieve all events
+            await tcp_send_message(self.writer,'$EVENTS,1;')
+            output = await tcp_recieve_message(self.reader)
+            # Output should be !GATRDY;
+            if output.rstrip() == "!GATRDY;":
+                LOGGER.info("TCP connection ready")
+            else:
+                LOGGER.warn(f"TCP connection not ready: {output}")
 
     async def async_keep_tcp_alive(self,now=None):
-        LOGGER.debug("Keeping TCP connection alive")
-        await tcp_send_message(self.writer,f"$OK;")
+        # This serves two purposes - to keep the connection alive and also to check that it hasn't been terminated at the other end
+        if self.online:
+            if self.comms_retry_attempts >= self.comms_max_retry_attempts:
+                LOGGER.error("Max retries on TCP connection reached. Attempting to re-establish TCP connection")
+                self.comms_retry_attempts = 0
+                await self.async_tcp_connect()
+            else:
+                LOGGER.debug("Keeping TCP connection alive")
+                # try:
+                self.readlock = True
+                LOGGER.debug("Locking reads and cancelling continuous task")
+                self.continuousTCPMonitor.cancel()
+                # LOGGER.debug(f"Status of monitor task is "+{str(self.continuousTCPMonitor.done())})
+                await tcp_send_message_plus(self.writer,self.reader,f"$OK;")
+                try:
+                    # async with asyncio.timeout(5):
+                    output = await asyncio.wait_for(tcp_recieve_message(self.reader), timeout=5.0)
+                # with async_timeout.timeout(5):
+                    # output = await tcp_recieve_message(self.reader)
+                    if output == "":
+                        self.comms_retry_attempts += 1
+                        LOGGER.error(f"Failed to communicate with NPU: Empty response on port {self._tcpport}. Please check 'Gateway control' is enabled on port {self._tcpport} on the eDIN system.  Attempt {self.comms_retry_attempts}/{self.comms_max_retry_attempts} before re-establishing connection.")
+                    else:
+                        self.comms_retry_attempts = 0
+                        LOGGER.debug(f"Acknowledge: {output}")
+                except asyncio.TimeoutError:
+                    self.comms_retry_attempts += 1
+                    LOGGER.error(f"No acknowledgement after 5 seconds. NPU might be offline? Attempt {self.comms_retry_attempts}/{self.comms_max_retry_attempts} before re-establishing connection.")
+                # output = await tcp_recieve_message(self.reader)
+                # LOGGER.debug(f"Acknowledge: {output}")
+                LOGGER.debug("Unlocking reads")
+                self.readlock = False
+                # except:
+                #     LOGGER.warn(f"Unable to establish TCP connection to eDIN+ (failed to keep alive). Check hostname and that port 26 is open.")
+                #     self.online = False
+        else:
+            LOGGER.error("eDIN TCP connection still offline. Attempting to re-establish TCP connection.")
+            await self.async_tcp_connect()
     
 
     async def async_response_handler(self,response):
@@ -147,26 +213,43 @@ class edinplus_NPU_instance:
                 statuscode = int(response.split(',')[4].split(';')[0])
                 if statuscode != 0:
                     LOGGER.warning(f"Module error on channel number [{chan_num}] (found on device {dev} @ address [{addr}]: {STATUSCODE_TO_SUMMARY[statuscode]} ({STATUSCODE_TO_DESC[statuscode]})")
+            # elif(response_type == '!OK'):
+            #     LOGGER.debug(f"Event has happened; queueing for acknowledgement: {response.rstrip()}")
+            #     # Maybe better to do this the other way around - i.e. store the expected responses and then check they are recieved here
+            #     self.queuedresponses.append(response.rstrip())
+            #     if len(self.queuedresponses) > 20:
+            #         self.queuedresponses.pop(0) #If there's more than 20 messages in queue that are unused, remove the first, as we should never have more than 20 queued messages to be acknowledged
             else:
                 LOGGER.debug(f"Unknown message recieved on TCP channel: {response}")
-        else:
-            LOGGER.debug("TCP rx: Empty response")
+        # else:
+        #     LOGGER.debug("TCP rx: Empty response")
 
     async def async_monitor_tcp(self,now=None):
-        if self.readlock:
-            # LOGGER.debug("Unable to read as reading already in progress")
-            pass
-        else:
-            # LOGGER.warning("Monitoring")
-            self.readlock = True
-            response = await tcp_recieve_message(self.reader)
-            self.readlock = False
-            await self.async_response_handler(response)
+        if self.online:
+            if self.readlock:
+                # LOGGER.debug("Unable to read as reading already in progress")
+                pass
+            else:
+                # LOGGER.debug("Monitoring")
+                self.readlock = True
+                # try:
+                    # response = await tcp_recieve_message(self.reader)
+                self.continuousTCPMonitor = asyncio.create_task(tcp_recieve_message(self.reader))
+                response = await self.continuousTCPMonitor
+                await self.async_response_handler(response)
+                # except:
+                #     LOGGER.warn(f"Unable to establish TCP connection to eDIN+ (failed to read). Check hostname and that port 26 is open.")
+                #     self.online = False
+                self.readlock = False
+        # else:
+        #     LOGGER.error("eDIN+ offline. Attempting reconnect")
+            # self.async_tcp_connect()
             
 
     async def monitor(self, hass: HomeAssistant) -> None:
         async_track_time_interval(hass,self.async_monitor_tcp, datetime.timedelta(seconds=0.01))
-        async_track_time_interval(hass,self.async_keep_tcp_alive, datetime.timedelta(minutes=30))
+        # async_track_time_interval(hass,self.async_keep_tcp_alive, datetime.timedelta(minutes=30))
+        async_track_time_interval(hass,self.async_keep_tcp_alive, datetime.timedelta(seconds=10))
 
 
     async def async_edinplus_discover_channels(self,config_entry: ConfigEntry,):
@@ -296,9 +379,11 @@ class edinplus_dimmer_channel_instance:
         if self.hub._use_chan_to_scn_proxy and chan_to_scn_id in self.hub.chan_to_scn_proxy:
             await tcp_send_message(self.hub.writer,f"$SCNRECALLX,{self.hub.chan_to_scn_proxy[chan_to_scn_id]},{str(intensity)},0;")
             LOGGER.debug(f"TCP tx: $SCNRECALLX,{self.hub.chan_to_scn_proxy[chan_to_scn_id]},{str(intensity)},0;")
+            LOGGER.debug(await tcp_recieve_message(self.hub.reader))
         else:
             await tcp_send_message(self.hub.writer,f"$ChanFade,{self._dimmer_address},{self._devcode},{self._channel},{str(intensity)},0;")
             LOGGER.debug(f"TCP tx: $ChanFade,{self._dimmer_address},{self._devcode},{self._channel},{str(intensity)},0;")
+            LOGGER.debug(await tcp_recieve_message(self.hub.reader))
         self._brightness = intensity
 
     async def turn_on(self):
@@ -307,9 +392,19 @@ class edinplus_dimmer_channel_instance:
         if self.hub._use_chan_to_scn_proxy and chan_to_scn_id in self.hub.chan_to_scn_proxy:
             await tcp_send_message(self.hub.writer,f"$SCNRECALLX,{self.hub.chan_to_scn_proxy[chan_to_scn_id]},255,0;")
             LOGGER.debug(f"TCP tx: $SCNRECALLX,{self.hub.chan_to_scn_proxy[chan_to_scn_id]},255,0;")
+            expectedResponse = f"!OK,SCNRECALLX,{self.hub.chan_to_scn_proxy[chan_to_scn_id]:05d},255,00000000;"
+            # time.sleep(0.02)
+            # LOGGER.debug(f"Expected: {expectedResponse}")
+            # if expectedResponse in self.hub.queuedresponses:
+            #     self.hub.queuedresponses.remove(expectedResponse) #Remove queued response
+            #     LOGGER.debug(f"Acknowlegement recieved")
+            # else:
+            #     LOGGER.warning(f"No acknowlegement recieved. Expected {expectedResponse}. Current queue:")
+            #     LOGGER.warning(self.hub.queuedresponses)
         else:
             await tcp_send_message(self.hub.writer,f"$ChanFade,{self._dimmer_address},{self._devcode},{self._channel},255,0;")
-            LOGGER.debug(f"TCP tx: $ChanFade,{self._dimmer_address},{self._devcode},{self._channel},255,0;")
+            # LOGGER.debug(f"TCP tx: $ChanFade,{self._dimmer_address},{self._devcode},{self._channel},255,0;")
+            # LOGGER.debug(await tcp_recieve_message(self.hub.reader))
         self._is_on = True
 
     async def turn_off(self):
@@ -319,10 +414,15 @@ class edinplus_dimmer_channel_instance:
         LOGGER.debug(f"chan_to_scn_proxy: {self.hub.chan_to_scn_proxy[chan_to_scn_id]}")
         if self.hub._use_chan_to_scn_proxy and chan_to_scn_id in self.hub.chan_to_scn_proxy:
             await tcp_send_message(self.hub.writer,f"$SCNRECALLX,{self.hub.chan_to_scn_proxy[chan_to_scn_id]},0,0;")
-            LOGGER.debug(f"TCP tx: $SCNRECALLX,{self.hub.chan_to_scn_proxy[chan_to_scn_id]},0,0;")
+            # LOGGER.debug(f"TCP tx: $SCNRECALLX,{self.hub.chan_to_scn_proxy[chan_to_scn_id]},0,0;")
+            # LOGGER.debug(f"Expected: !OK,SCNRECALLX,{self.hub.chan_to_scn_proxy[chan_to_scn_id]},000,00000000;")
+            # recieved = self.hub.queuedresponses[0]
+            # self.hub.queuedresponses.pop(0) #Remove queued response
+            # LOGGER.debug(f"Actual:   {recieved}")
         else:
             await tcp_send_message(self.hub.writer,f"$ChanFade,{self._dimmer_address},{self._devcode},{self._channel},0,0;")
-            LOGGER.debug(f"TCP tx: $ChanFade,{self._dimmer_address},{self._devcode},{self._channel},0,0;")
+            # LOGGER.debug(f"TCP tx: $ChanFade,{self._dimmer_address},{self._devcode},{self._channel},0,0;")
+            # LOGGER.debug(await tcp_recieve_message(self.hub.reader))
         self._is_on = False
 
     async def tcp_force_state_inform(self):
