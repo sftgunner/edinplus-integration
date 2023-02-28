@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+import logging
+LOGGER = logging.getLogger("edinplus")
 
 from . import edinplus
 
@@ -15,16 +17,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up NPU from config entry."""
     # Store an instance of the "connecting" class that does the work of speaking
     # with your actual devices.
-    hub = edinplus.edinplus_NPU_instance(hass, entry.data["host"])
+    hub = edinplus.edinplus_NPU_instance(hass, entry.data["host"], entry.entry_id)
+    LOGGER.debug("Initialised NPU instance")
 
     hass.data.setdefault("edinplus", {})[entry.entry_id] = hub
 
+
+    # Initialise the TCP connection to the hub
+    await hub.async_tcp_connect()
+    LOGGER.debug("Completed TCP connect")
     # Ensure that all the devices are up to date on initialisation
-    await hub.discover()
+    await hub.discover(entry)
+    LOGGER.debug("Completed discover")
+    # Monitor the TCP connection for any changes
+    await hub.monitor(hass)
+    LOGGER.debug("Completed monitor")
 
     # This creates each HA object for each platform your device requires.
     # It's done by calling the `async_setup_entry` function in each platform module.
-    hass.config_entries.async_setup_platforms(entry, PLATFORMS)
+    # hass.config_entries.async_setup_platforms(entry, PLATFORMS)
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    LOGGER.debug("Completed platform setup")
     return True
 
 

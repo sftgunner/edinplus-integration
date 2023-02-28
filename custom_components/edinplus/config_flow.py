@@ -12,6 +12,9 @@ from homeassistant.core import HomeAssistant
 #from .const import DOMAIN  # pylint:disable=unused-import
 from .edinplus import edinplus_NPU_instance
 
+# Import constants
+from .const import DOMAIN
+
 _LOGGER = logging.getLogger(__name__)
 
 # This is the schema that used to display the UI to the user.
@@ -30,9 +33,9 @@ async def validate_input(hass: HomeAssistant, data: dict) -> dict[str, Any]:
     if len(data["host"]) < 3:
         raise InvalidHost
 
-    hub = edinplus_NPU_instance(hass, data["host"])
+    hub = edinplus_NPU_instance(hass, data["host"],None)
     # Now we need to initialise the lights
-    await hub.discover()
+    # await hub.discover()
     
     # # The dummy hub provides a `test_connection` method to ensure it's working
     # # as expected
@@ -61,7 +64,7 @@ async def validate_input(hass: HomeAssistant, data: dict) -> dict[str, Any]:
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain="edinplus"):
-    """Handle a config flow for Hello World."""
+    """Handle a config flow for eDIN+."""
 
     VERSION = 1
     # Pick one of the available connection classes in homeassistant/config_entries.py
@@ -100,6 +103,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain="edinplus"):
         return self.async_show_form(
             step_id="user", data_schema=DATA_SCHEMA, errors=errors
         )
+        _LOGGER.debug("Reached end of config flow")
 
 
 class CannotConnect(exceptions.HomeAssistantError):

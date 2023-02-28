@@ -1,10 +1,13 @@
 """Platform for light integration."""
 from __future__ import annotations
 
+from typing import Any
+
 import logging
 import requests
 
 from .edinplus import edinplus_dimmer_channel_instance
+from .const import DOMAIN
 import voluptuous as vol
 
 from pprint import pformat
@@ -15,6 +18,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.components.light import (SUPPORT_BRIGHTNESS, ATTR_BRIGHTNESS,
                                             PLATFORM_SCHEMA, LightEntity)
 from homeassistant.const import CONF_NAME, CONF_IP_ADDRESS
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
@@ -27,21 +31,6 @@ _LOGGER = logging.getLogger("edinplus")
 #     vol.Required(CONF_IP_ADDRESS): cv.string,
 # })
 
-
-# async def async_setup_platform(
-#     hass: HomeAssistant,
-#     config: ConfigType,
-#     add_entities: AddEntitiesCallback,
-#     discovery_info: DiscoveryInfoType | None = None
-# ) -> None:
-#     """Set up the eDIN+ Light platform."""
-#     # Add devices
-#     _LOGGER.info(pformat(config))
-
-#     channels = await EdinPlusDiscoverChannels(config[CONF_IP_ADDRESS])
-
-#     for channel in channels:
-#         add_entities([EdinPlusLightChannel(channel)])
 
 # This function is called as part of the __init__.async_setup_entry (via the
 # hass.config_entries.async_forward_entry_setup call)
@@ -61,17 +50,31 @@ async def async_setup_entry(
 class EdinPlusLightChannel(LightEntity):
     """Representation of an Edin Light Channel."""
 
+    should_poll = False
+
     def __init__(self, light) -> None:
         """Initialize an eDIN+ Light Channel."""
         _LOGGER.info(pformat(light))
-        #self._light = edinplus_dimmer_channel_instance(light["hostname"],light["address"],light["channel"])
         self._light = light
-        #self._name = light["name"]
         self._attr_name = self._light.name
         self._attr_unique_id = f"{self._light.light_id}_light"
-        #self._unique_id = "edinpluscustomuuid-"+str(self._light._dimmer_address)+"-"+str(self._light._channel)
         self._state = None
         self._brightness = None
+
+    async def async_added_to_hass(self) -> None:
+        """Run when this Entity has been added to HA."""
+        # Importantly for a push integration, the module that will be getting updates
+        # needs to notify HA of changes. The dummy device has a registercallback
+        # method, so to this we add the 'self.async_write_ha_state' method, to be
+        # called where ever there are changes.
+        # The call back registration is done once this entity is registered with HA
+        # (rather than in the __init__)
+        self._light.register_callback(self.async_write_ha_state)
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Entity being removed from hass."""
+        # The opposite of async_added_to_hass. Remove any registered call backs here.
+        self._light.remove_callback(self.async_write_ha_state)
 
     # @property
     # def name(self) -> str:
@@ -81,14 +84,15 @@ class EdinPlusLightChannel(LightEntity):
     @property
     def device_info(self) -> DeviceInfo:
         """Return the device info"""
-        return {
-        "identifiers": {("edinplus",self._light.light_id)},
-            "name": self.name,
-            "sw_version": "1.0.0",
-            "model": self._light.model,
-            "manufacturer": self._light.hub.manufacturer,
-            "suggested_area": self._light.area,
-        }
+        return DeviceInfo(
+            identifiers={("edinplus",self._light.light_id)},
+                name=self.name,
+                sw_version="1.0.0",
+                model=self._light.model,
+                manufacturer=self._light.hub.manufacturer,
+                suggested_area=self._light.area,
+                via_device=(DOMAIN,self._light.hub._id),
+        )
 
     # @property
     # def unique_id(self) -> str:
@@ -102,7 +106,10 @@ class EdinPlusLightChannel(LightEntity):
         This method is optional. Removing it indicates to Home Assistant
         that brightness is not supported for this light.
         """
-        return self._brightness
+        if self._light._brightness == None:
+            return 0
+        else:
+            return int(self._light._brightness)
 
     @property
     def supported_features(self):
@@ -111,7 +118,11 @@ class EdinPlusLightChannel(LightEntity):
     @property
     def is_on(self) -> bool | None:
         """Return true if light is on."""
-        return self._state
+        if self._light._brightness == None:
+            return False
+        else:
+            return (int(self._light._brightness) > 0)
+        # return (int(self._light._brightness) > 0)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Instruct the light to turn on."""
@@ -132,6 +143,8 @@ class EdinPlusLightChannel(LightEntity):
 
         This is the only method that should fetch new data for Home Assistant.
         """
+        # This should no longer be used
+        LOGGER.warning("async update performed")
         self._brightness = await self._light.get_brightness()
         if int(self._brightness) > 0:
             self._state = True
