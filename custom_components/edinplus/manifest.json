@@ -1,13 +1,12 @@
 {
     "domain": "edinplus",
     "name": "eDIN+",
-    "integration_type": "hub",
+    "codeowners": ["@sftgunner"],
     "config_flow": true,
     "documentation": "https://github.com/sftgunner/edinplus-integration",
+    "integration_type": "hub",
+    "iot_class": "local_polling",
     "issue_tracker": "https://github.com/sftgunner/edinplus-integration/issues",
     "requirements": [],
-    "codeowners": ["@sftgunner"],
-    "iot_class": "local_polling",
     "version": "0.4.1",
-    "config_flow": true
 }
