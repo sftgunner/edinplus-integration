@@ -33,9 +33,9 @@ async def validate_input(hass: HomeAssistant, data: dict) -> dict[str, Any]:
     if len(data["host"]) < 3:
         raise InvalidHost
 
-    hub = edinplus_NPU_instance(hass, data["host"])
+    hub = edinplus_NPU_instance(hass, data["host"],None)
     # Now we need to initialise the lights
-    await hub.discover()
+    # await hub.discover()
     
     # # The dummy hub provides a `test_connection` method to ensure it's working
     # # as expected
@@ -103,6 +103,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain="edinplus"):
         return self.async_show_form(
             step_id="user", data_schema=DATA_SCHEMA, errors=errors
         )
+        _LOGGER.debug("Reached end of config flow")
 
 
 class CannotConnect(exceptions.HomeAssistantError):

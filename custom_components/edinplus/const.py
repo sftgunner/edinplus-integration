@@ -2,6 +2,8 @@
 
 DOMAIN = "edinplus"
 
+EDINPLUS_EVENT = f"{DOMAIN}_event"
+
 # Define consts
 
 DEVCODE_TO_PRODCODE = {

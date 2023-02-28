@@ -17,7 +17,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up NPU from config entry."""
     # Store an instance of the "connecting" class that does the work of speaking
     # with your actual devices.
-    hub = edinplus.edinplus_NPU_instance(hass, entry.data["host"])
+    hub = edinplus.edinplus_NPU_instance(hass, entry.data["host"], entry.entry_id)
     LOGGER.debug("Initialised NPU instance")
 
     hass.data.setdefault("edinplus", {})[entry.entry_id] = hub

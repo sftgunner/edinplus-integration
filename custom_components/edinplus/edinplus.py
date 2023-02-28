@@ -12,6 +12,12 @@ import datetime
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers import device_registry as dr
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import (
+    CONF_DEVICE_ID,
+    CONF_HOST,
+    CONF_TOKEN,
+    CONF_TYPE,
+)
 
 # Import constants
 from .const import *
@@ -65,14 +71,15 @@ async def tcp_recieve_message(reader):
     return data.decode()
 
 class edinplus_NPU_instance:
-    def __init__(self,hass: HomeAssistant,hostname:str) -> None:
+    def __init__(self,hass: HomeAssistant,hostname:str,entry_id) -> None:
         LOGGER.debug("Initialising NPU")
         self._hostname = hostname
         self._hass = hass
         self._name = hostname
         self._tcpport = 26
+        self._entry_id = entry_id
         self._id = "edinpluscustomuuid-hub-"+hostname.lower()
-        #NB although the 1 doesn't exist in the Edin+ API spec for gateway endpoint, it's the only way to stop requests from stripping it completely (which results in /gateway, a 404)
+        #NB although the 1 doesn't exist in the Edin+ API spec for gateway endpoint, it's the only way to stop requests from stripping the ? completely (which results in /gateway, a 404)
         self._endpoint = f"http://{hostname}/gateway?1"
         self.lights = []
         self.manufacturer = "Mode Lighting"
@@ -82,8 +89,7 @@ class edinplus_NPU_instance:
         self.continuousTCPMonitor = None # For the coroutine task that monitors the TCP stream
         self.readlock = False
         self._callbacks = set()
-        # This should be offered in config flow
-        self._use_chan_to_scn_proxy = True
+        self._use_chan_to_scn_proxy = True # This should be offered in config flow
         self.chan_to_scn_proxy = {}
         self.online = False
         self.comms_retry_attempts = 0 
@@ -92,11 +98,11 @@ class edinplus_NPU_instance:
     
     async def discover(self,config_entry: ConfigEntry):
         self.lights = await self.async_edinplus_discover_channels(config_entry)
+        self.chan_to_scn_proxy = await self.async_edinplus_map_chans_to_scns()
         # Get the status for each light
         for light in self.lights:
             await light.tcp_force_state_inform()
 
-        self.chan_to_scn_proxy = await self.async_edinplus_map_chans_to_scns()
 
     async def async_tcp_connect(self):
         LOGGER.debug(f"Establishing TCP connection to {self._hostname} on port {self._tcpport}")
@@ -158,7 +164,7 @@ class edinplus_NPU_instance:
                 #     LOGGER.warn(f"Unable to establish TCP connection to eDIN+ (failed to keep alive). Check hostname and that port 26 is open.")
                 #     self.online = False
         else:
-            LOGGER.error("eDIN TCP connection still offline. Attempting to re-establish TCP connection.")
+            LOGGER.error("eDIN+ TCP connection still offline. Attempting to re-establish TCP connection.")
             await self.async_tcp_connect()
     
 
@@ -167,34 +173,69 @@ class edinplus_NPU_instance:
             response_type = response.split(',')[0]
             # Parse response and determine what to do with it
             if response_type == "!INPSTATE":
-                #It's a contact module press - fire a custom event!
-                edinplus_event = {}
-                edinplus_event['address'] = int(response.split(',')[1])
-                edinplus_event['device'] = DEVCODE_TO_PRODNAME[int(response.split(',')[2])]
-                edinplus_event['channel'] = int(response.split(',')[3])
-                edinplus_event['newstate'] = int(response.split(',')[4].split(';')[0])
-                edinplus_event['newstate_desc'] = NEWSTATE_TO_BUTTONEVENT[edinplus_event['newstate']]
-                edinplus_event['description'] = "Change in switched input"
-                edinplus_event['raw'] = response
-                LOGGER.info(f"Firing contact module press event: {edinplus_event}")
-                self._hass.bus.fire("edinplus_event", edinplus_event)
+
+                address = int(response.split(',')[1])
+                channel = int(response.split(',')[3])
+                newstate_numeric = int(response.split(',')[3])
+                newstate = NEWSTATE_TO_BUTTONEVENT[newstate_numeric]
+                uuid = f"edinpluscustomuuid-{address}-{channel}"
+                # Get the HA device ID that triggered the event 
+                device_registry = dr.async_get(self._hass)
+                device_entry = device_registry.async_get_or_create(
+                    config_entry_id=self._entry_id,
+                    identifiers={(DOMAIN, uuid)},
+                )
+
+                LOGGER.debug(f"Firing event for contact module device {uuid} with trigger type {newstate}")
+                self._hass.bus.fire(EDINPLUS_EVENT, {CONF_DEVICE_ID: device_entry.id, CONF_TYPE: newstate})
+
+                # #It's a contact module press - fire a custom event!
+                # edinplus_event = {}
+                # edinplus_event['address'] = int(response.split(',')[1])
+                # edinplus_event['device'] = DEVCODE_TO_PRODNAME[int(response.split(',')[2])]
+                # edinplus_event['channel'] = int(response.split(',')[3])
+                # edinplus_event['newstate'] = int(response.split(',')[4].split(';')[0])
+                # edinplus_event['newstate_desc'] = NEWSTATE_TO_BUTTONEVENT[edinplus_event['newstate']]
+                # edinplus_event['description'] = "Change in switched input"
+                # edinplus_event['raw'] = response
+                # LOGGER.info(f"Firing contact module press event: {edinplus_event}")
+                # self._hass.bus.fire("edinplus_event", edinplus_event)
+
+
             elif response_type == "!BTNSTATE":
-                #It's a keypad module press - fire a custom event!
-                edinplus_event = {}
-                edinplus_event['address'] = int(response.split(',')[1])
-                edinplus_event['device'] = DEVCODE_TO_PRODNAME[int(response.split(',')[2])]
-                edinplus_event['channel'] = int(response.split(',')[3])
-                edinplus_event['newstate'] = int(response.split(',')[4].split(';')[0])
-                edinplus_event['newstate_desc'] = NEWSTATE_TO_BUTTONEVENT[edinplus_event['newstate']]
-                edinplus_event['description'] = "Change in button switch state"
-                edinplus_event['raw'] = response
-                LOGGER.info(f"Firing keypad module press event: {edinplus_event}")
-                self._hass.bus.fire("edinplus_event", edinplus_event)
+
+                address = int(response.split(',')[1])
+                channel = int(response.split(',')[3])
+                newstate_numeric = int(response.split(',')[3])
+                newstate = NEWSTATE_TO_BUTTONEVENT[newstate_numeric]
+                uuid = f"edinpluscustomuuid-{address}-{channel}"
+                # Get the HA device ID that triggered the event 
+                device_registry = dr.async_get(self._hass)
+                device_entry = device_registry.async_get_or_create(
+                    config_entry_id=self._entry_id,
+                    identifiers={(DOMAIN, uuid)},
+                )
+                
+                LOGGER.debug(f"Firing event for keypad module device {uuid} with trigger type {newstate}")
+                self._hass.bus.fire(EDINPLUS_EVENT, {CONF_DEVICE_ID: device_entry.id, CONF_TYPE: newstate})
+
+
+                # #It's a keypad module press - fire a custom event!
+                # edinplus_event = {}
+                # edinplus_event['address'] = int(response.split(',')[1])
+                # edinplus_event['device'] = DEVCODE_TO_PRODNAME[int(response.split(',')[2])]
+                # edinplus_event['channel'] = int(response.split(',')[3])
+                # edinplus_event['newstate'] = int(response.split(',')[4].split(';')[0])
+                # edinplus_event['newstate_desc'] = NEWSTATE_TO_BUTTONEVENT[edinplus_event['newstate']]
+                # edinplus_event['description'] = "Change in button switch state"
+                # edinplus_event['raw'] = response
+                # LOGGER.info(f"Firing keypad module press event: {edinplus_event}")
+                # self._hass.bus.fire("edinplus_event", edinplus_event)
             elif (response_type == '!CHANFADE')or(response_type == '!CHANLEVEL'):
                 for light in self.lights:
                     if light.channel == int(response.split(',')[3]):
                         light._brightness = int(response.split(',')[4])
-                        LOGGER.info(f"Found light on channel {light.channel}. Writing brightness {light._brightness} to it")
+                        LOGGER.info(f"Found light on channel {light.channel}. Writing existing brightness {light._brightness} to it in HA")
                         light._is_on = (int(response.split(',')[4]) > 0)
                         for callback in light._callbacks:
                             callback()
@@ -213,6 +254,21 @@ class edinplus_NPU_instance:
                 statuscode = int(response.split(',')[4].split(';')[0])
                 if statuscode != 0:
                     LOGGER.warning(f"Module error on channel number [{chan_num}] (found on device {dev} @ address [{addr}]: {STATUSCODE_TO_SUMMARY[statuscode]} ({STATUSCODE_TO_DESC[statuscode]})")
+            # elif(response_type.rstrip() == '!OK;'):
+            #     uuid = f"edinpluscustomuuid-{int(2)}-{int(1)}"
+            #     # Get the HA device id
+            #     device_registry = dr.async_get(self._hass)
+            #     device_entry = device_registry.async_get_or_create(
+            #         config_entry_id=self._entry_id,
+            #         identifiers={(DOMAIN, uuid)},
+            #     )
+
+            #     LOGGER.warning("Exposing !OK as edinplus_event - for testing only.")
+
+            #     LOGGER.info(f"Device entry id {device_entry.id}")
+            #     LOGGER.info(f"Conf_type {NEWSTATE_TO_BUTTONEVENT[1]}")
+            #     self._hass.bus.fire(EDINPLUS_EVENT, {CONF_DEVICE_ID: device_entry.id, CONF_TYPE: NEWSTATE_TO_BUTTONEVENT[1]})
+            
             # elif(response_type == '!OK'):
             #     LOGGER.debug(f"Event has happened; queueing for acknowledgement: {response.rstrip()}")
             #     # Maybe better to do this the other way around - i.e. store the expected responses and then check they are recieved here
@@ -275,8 +331,18 @@ class edinplus_NPU_instance:
             # Parsing expected format of Area,AreaNum,AreaName
             areas[int(area.split(',')[1])] = area.split(',')[2]
 
-        channels_csv = [idx for idx in NPU_data if idx.startswith("CHAN")]
 
+        plates_csv = [idx for idx in NPU_data if idx.startswith("PLATE")]
+
+        plate_areas = {}
+        plate_names = {}
+        for plate in plates_csv:
+            # Parsing expected format of !Plate,Address,DevCode,AreaNum,PlateName
+            plate_areas[int(plate.split(',')[1])] = plate.split(',')[3]
+            plate_names[int(plate.split(',')[1])] = plate.split(',')[4]
+
+        # Lighting channels
+        channels_csv = [idx for idx in NPU_data if idx.startswith("CHAN")]
         for channel in channels_csv:
             # Parsing expected format of Channel,Address,DevCode,ChanNum,AreaNum,ChanName
             channel_entity = {}
@@ -289,6 +355,7 @@ class edinplus_NPU_instance:
             #print(channel_entity)
             dimmer_channel_instances.append(edinplus_dimmer_channel_instance(channel_entity['address'],channel_entity['channel'],f"{channel_entity['area']} {channel_entity['name']}",channel_entity['area'],channel_entity['model'],channel_entity['devcode'],self))
 
+        # Contact modules
         inputs_csv = [idx for idx in NPU_data if idx.startswith("INPSTATE")]
         for input in inputs_csv:
             # Parsing expected format of Channel,Address,DevCode,ChanNum,AreaNum,ChanName
@@ -296,17 +363,33 @@ class edinplus_NPU_instance:
             input_entity['address'] = int(input.split(',')[1])
             input_entity['channel'] = int(input.split(',')[3])
             input_entity['id'] = f"edinpluscustomuuid-{input_entity['address']}-{input_entity['channel']}"
-            input_entity['name'] = input.split(',')[5]
-            input_entity['area'] = areas[int(input.split(',')[4])]
+            # For area on keypad this has to be matched to the PLATE
             input_entity['devcode'] = int(input.split(',')[2])
             input_entity['model'] = DEVCODE_TO_PRODNAME[input_entity['devcode']]
+            if input_entity['devcode'] == 9:
+                input_entity['name'] = input.split(',')[5]
+                input_entity['area'] = areas[int(input.split(',')[4])]
+                input_entity['full_name'] = f"{input_entity['area']} {input_entity['name']} switch"
+            elif input_entity['devcode'] == 2:
+                input_entity['name'] = plate_names[int(input.split(',')[1])]
+                input_entity['area'] = areas[int(plate_areas[int(input.split(',')[1])])]
+                # Keypads can't have names assigned via the eDIN+ interface
+                input_entity['full_name'] = f"{input_entity['area']} {input_entity['name']} button {input_entity['channel']}"
+            else:
+                input_entity['name'] = input.split(',')[5]
+                input_entity['area'] = areas[int(input.split(',')[4])]
+                input_entity['full_name'] = f"{input_entity['area']} {input_entity['name']} switch"
+            
+            
             # LOGGER.info(f"Have found input entity {input_entity['name']} in room {input_entity['area']} but support for inputs has not been added yet.")
+            LOGGER.debug(f"Input entity found {input_entity['name']} with id {input_entity['id']}")
 
             device_registry.async_get_or_create(
                 config_entry_id = config_entry.entry_id,
                 identifiers={(DOMAIN, input_entity['id'])},
                 manufacturer=self.manufacturer,
-                name=f"Light switch ({input_entity['name']})",
+                # name=f"Light switch ({input_entity['name']})",
+                name=input_entity['full_name'],
                 suggested_area=input_entity['area'],
                 model=input_entity['model'],
                 via_device=(DOMAIN,self._id),
