@@ -84,15 +84,15 @@ class EdinPlusLightChannel(LightEntity):
     @property
     def device_info(self) -> DeviceInfo:
         """Return the device info"""
-        return {
-        "identifiers": {("edinplus",self._light.light_id)},
-            "name": self.name,
-            "sw_version": "1.0.0",
-            "model": self._light.model,
-            "manufacturer": self._light.hub.manufacturer,
-            "suggested_area": self._light.area,
-            "via_device":(DOMAIN,self._light.hub._id),
-        }
+        return DeviceInfo(
+            identifiers={("edinplus",self._light.light_id)},
+                name=self.name,
+                sw_version="1.0.0",
+                model=self._light.model,
+                manufacturer=self._light.hub.manufacturer,
+                suggested_area=self._light.area,
+                via_device=(DOMAIN,self._light.hub._id),
+        )
 
     # @property
     # def unique_id(self) -> str:
