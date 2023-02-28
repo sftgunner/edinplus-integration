@@ -1,13 +1,12 @@
 # eDIN+ Component (Platform) for Home Assistant
 
-Tested on HA 2022.12.6 and eDIN+ firmware SW00120.2.4.1.44
-
+Tested on HA 2022.12.6-2023.3 and eDIN+ firmware SW00120.2.4.1.44
 
 The state of this component is: Local Push
 
 This component currently communicates with the NPU over a combination of HTTP and TCP using port 26 (not currently configurable)
 
-Inputs currently trigger "edinplus_events" that can be used for automation
+Inputs currently trigger device triggers that can be used for automation
 
 ## Installation
 
@@ -27,7 +26,7 @@ Following that, [add this repository to the list of custom repositories in HACS]
 
 Then follow the steps in "Configuration" below.
 
-### Manual: adding the eDIN+ Component to Home Assistant
+### Manual: adding the eDIN+ Component to Home Assistant (not recommended)
 The **edinplus.py** files need to be placed in the installation directory of Home Assistant.
 ```
 <config_dir>/custom_components/edinplus/__init__.py
@@ -58,7 +57,7 @@ Please ensure it is in the format: "192.168.1.100" (excluding quotes).
 
 - Autodiscover of all channels configured in NPU
 - Dimmer channels from eDIN 2A 8 channel dimmer module (DIN-02-08) are imported as 8 individual lights, with full dimmable control.
-- Inputs from either wall plates (EVO-SGP-xx) or contact input modules (EVO-INT_CI_xx) are exposed to HomeAssistant as an `edinplus_event` event. See [the technical information section below](#technical_information) for information on the payload contents. In future, these will be assigned as device triggers for the relevant input channel "device", exposed in HomeAssistant.
+- Inputs from either wall plates (EVO-SGP-xx) or contact input modules (EVO-INT_CI_xx) are exposed to HomeAssistant as device triggers.
 - If you have scenes in your NPU that contain a single channel, turning this light on and off will actually control the scene, rather than the output channel directly. This ensures better interoperability between the native eDIN+ system and HomeAssistant.
 
 ## eDIN+
@@ -96,7 +95,7 @@ The method of reading from the TCP stream in "realtime" is somewhat of a hack, b
 
 Output channels are named as "{area} {channel name}" (e.g. "Living Room downlighters"), and will automatically be assigned to a HomeAssistant area with the same name as the eDIN+ room.
 
-Input channels are named as "Light switch ({channel name})", and will automatically be assigned to a HomeAssistant area with the same name as the eDIN+ room.
+Input channels are named as "{area} {channel name} switch" (e.g. "Living Room downlighters switch") for contact modules, or "{area} {plate name} button {N}" (e.g. Bedroom Keypad button 2) for wall plates. Input channels will automatically be assigned to a HomeAssistant area with the same name as the eDIN+ room.
 
 ### Discovery
 
@@ -105,17 +104,3 @@ Discovery is completed by calling the `/info?what=names` endpoint on the NPU via
 At present, only lines starting `CHAN` and `INPSTATE` are read as ouput channels and input channels respectively. It is a known issue that `INPSTATE` doesn't read each channel from wall plates.
 
 One-to-one channel-to-scene mapping is done by requesting all scenes via `?SCNNAMES;` and then `?SCNCHANNAMES,{scene};`. If a scene controls only a single channel, then instead of using `$ChanFade,...` to control the channel output, `$SCNRECALLX,...` is used instead.
-
-### edinplus_event information
-
-`edinplus_event` events contain the following information:
-
-- address: Device address [int]
-- device: Device full name [str]
-- channel: Channel on device that has been triggered [int]
-- newstate: The new state (e.g. 1 for "Press-on") [int]
-- newstate_desc: The english version of the new state (e.g "Press-on") [str]
-- description: A generic description of the event type [str]
-- raw: The raw API call recieved to trigger the event [str]
-
-A full list of the different button states can be found in `const.py` under `NEWSTATE_TO_BUTTONEVENT`.
