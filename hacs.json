@@ -1,0 +1,6 @@
+{
+    "name": "eDin+ integration for Home Assistant",
+    "hacs": "1.6.0",
+    "render_readme": true,
+    "homeassistant": "2023.3"
+}
