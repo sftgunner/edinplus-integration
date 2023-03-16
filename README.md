@@ -20,11 +20,13 @@ This component can be easily installed via the Home Assistant Community Store (H
 
 If you have not done so already, [follow the instructions to install HACS](https://hacs.xyz/docs/setup/download/) on your HomeAssistant instance.
 
-Following that, [add this repository to the list of custom repositories in HACS](https://github.com/masaccio/ha-kingspan-watchman-sensit), using the following url:
+Then download the component by clicking on the link below.
 
-`https://github.com/sftgunner/edinplus-integration`
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=sftgunner&repository=edinplus-integration&category=integration)
 
-Then follow the steps in "Configuration" below.
+Then follow the steps in ["Configuration"](#configuration) below.
+
+This method allows for installing updates through HACS.
 
 ### Manual: adding the eDIN+ Component to Home Assistant (not recommended)
 The **edinplus.py** files need to be placed in the installation directory of Home Assistant.
