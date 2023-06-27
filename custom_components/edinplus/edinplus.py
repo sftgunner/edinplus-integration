@@ -174,20 +174,24 @@ class edinplus_NPU_instance:
             # Parse response and determine what to do with it
             if response_type == "!INPSTATE":
 
-                address = int(response.split(',')[1])
-                channel = int(response.split(',')[3])
-                newstate_numeric = int(response.split(',')[3])
-                newstate = NEWSTATE_TO_BUTTONEVENT[newstate_numeric]
-                uuid = f"edinpluscustomuuid-{address}-{channel}"
-                # Get the HA device ID that triggered the event 
-                device_registry = dr.async_get(self._hass)
-                device_entry = device_registry.async_get_or_create(
-                    config_entry_id=self._entry_id,
-                    identifiers={(DOMAIN, uuid)},
-                )
+                try:
+                    address = int(response.split(',')[1])
+                    channel = int(response.split(',')[3])
+                    newstate_numeric = int(response.split(',')[4][:3])
+                    newstate = NEWSTATE_TO_BUTTONEVENT[newstate_numeric]
+                    uuid = f"edinpluscustomuuid-{address}-{channel}"
+                    # Get the HA device ID that triggered the event 
+                    device_registry = dr.async_get(self._hass)
+                    device_entry = device_registry.async_get_or_create(
+                        config_entry_id=self._entry_id,
+                        identifiers={(DOMAIN, uuid)},
+                    )
 
-                LOGGER.debug(f"Firing event for contact module device {uuid} with trigger type {newstate}")
-                self._hass.bus.fire(EDINPLUS_EVENT, {CONF_DEVICE_ID: device_entry.id, CONF_TYPE: newstate})
+                    LOGGER.debug(f"Firing event for contact module device {uuid} with trigger type {newstate}")
+                    self._hass.bus.fire(EDINPLUS_EVENT, {CONF_DEVICE_ID: device_entry.id, CONF_TYPE: newstate})
+                except:
+                    LOGGER.warning(f"An error occurred when firing event for contact module device {address}-{channel} with trigger type {newstate_numeric}")
+                    LOGGER.warning(f"Full error: {response}")
 
                 # #It's a contact module press - fire a custom event!
                 # edinplus_event = {}
@@ -206,7 +210,7 @@ class edinplus_NPU_instance:
 
                 address = int(response.split(',')[1])
                 channel = int(response.split(',')[3])
-                newstate_numeric = int(response.split(',')[3])
+                newstate_numeric = int(response.split(',')[4])
                 newstate = NEWSTATE_TO_BUTTONEVENT[newstate_numeric]
                 uuid = f"edinpluscustomuuid-{address}-{channel}"
                 # Get the HA device ID that triggered the event 
