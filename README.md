@@ -1,6 +1,8 @@
 # eDIN+ Component (Platform) for Home Assistant
 
-Tested on HA 2022.12.6-2023.3 and eDIN+ firmware SW00120.2.4.1.44
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
+
+Tested on HA 2022.12.6 - 2023.3 and eDIN+ firmware SW00120.2.4.1.44
 
 The state of this component is: Local Push
 
@@ -12,7 +14,7 @@ Inputs currently trigger device triggers that can be used for automation
 
 ### Disclaimer
 
-> :warning: This component is still in the alpha stage of development. It is highly likely that you will need to completely remove and reinstall this component in order to upgrade to the latest version, losing any entities defined in automations.
+> :warning: This component is still in development. It is highly likely that you will need to completely remove and reinstall this component in order to upgrade to the latest version, losing any entities defined in automations.
 
 ### Via HACS (preferred)
 
@@ -20,7 +22,7 @@ This component can be easily installed via the Home Assistant Community Store (H
 
 If you have not done so already, [follow the instructions to install HACS](https://hacs.xyz/docs/setup/download/) on your HomeAssistant instance.
 
-Then download the component by clicking on the link below.
+Following that, [add this repository to the list of custom repositories in HACS](https://hacs.xyz/docs/faq/custom_repositories), using the following url:
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=sftgunner&repository=edinplus-integration&category=integration)
 
@@ -51,9 +53,9 @@ Then add the integration through the integrations page [https://{ip}:8123/config
 
 [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=edinplus)
 
-Currently it will prompt for data input without any explanation text - this is the hostname or IP address of the eDIN+ NPU (network processing unit). 
+When prompted, please enter the hostname or IP address of the eDIN+ NPU (network processing unit). Please ensure it is in the format: "192.168.1.100" (excluding quotes).
 
-Please ensure it is in the format: "192.168.1.100" (excluding quotes).
+HomeAssistant will then automatically discover all devices connected to the NPU, and will automatically suggest Home Assistant areas for each device based on their "room" in the eDIN+ configuration. Please note that lighting devices (dimmer channels) may not immediately appear after install/configuration.
 
 ## Features
 
@@ -61,6 +63,13 @@ Please ensure it is in the format: "192.168.1.100" (excluding quotes).
 - Dimmer channels from eDIN 2A 8 channel dimmer module (DIN-02-08) are imported as 8 individual lights, with full dimmable control.
 - Inputs from either wall plates (EVO-SGP-xx) or contact input modules (EVO-INT_CI_xx) are exposed to HomeAssistant as device triggers.
 - If you have scenes in your NPU that contain a single channel, turning this light on and off will actually control the scene, rather than the output channel directly. This ensures better interoperability between the native eDIN+ system and HomeAssistant.
+
+## Compatible modules/controls
+The following modules/controls have been verified to work correctly with this integration
+- Network Processor Module (DIN-NPU-00-01-PLUS) **REQUIRED**
+- 8 Channel Dimmer Module (DIN-02-08-PLUS)
+- Input-Output Module (DIN-INT-00-08-PLUS)
+- 10 Button Geneva Control Plate (GVA-SGP-55) :warning: **PARTIAL SUPPORT**
 
 ## eDIN+
 More information about the eDIN+ system can be found on Mode Lighting's website: http://www.modelighting.com/products/edin-plus/
@@ -70,6 +79,8 @@ More information about the eDIN+ system can be found on Mode Lighting's website:
 If you find any bugs, please feel free to submit an issue, pull request or just fork this repo and improve it yourself!
 
 If opening an issue, please could you also include any detail from the HomeAssistant logs (if there are any!): just search for "edinplus" on this page: https://{ip}:8123/config/logs and any error messages should appear (click on them for more detail).
+
+If a module doesn't work as expected, please check it appears in the list of [compatible modules/controls](https://github.com/sftgunner/edinplus-integration/README.md#compatible-modulescontrols) before submitting an issue. If your module does not appear in this list, it is not expected that it will work with this integration. As I am only able to develop for the hardware I have, it is unlikely that I'll be able to add support for any modules not listed above. Having said that, please feel free to implement it yourself and then submit a pull request!
 
 ## Technical information
 

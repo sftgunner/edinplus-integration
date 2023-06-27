@@ -493,8 +493,8 @@ class edinplus_dimmer_channel_instance:
     async def turn_off(self):
         #await async_send_to_npu(self.hub._endpoint,f"$ChanFade,{self._dimmer_address},12,{self._channel},0,0;")
         chan_to_scn_id = f"{str(self._dimmer_address).zfill(3)}-{str(self._channel).zfill(3)}"
-        LOGGER.debug(f"chan_to_scn_id: {chan_to_scn_id}")
-        LOGGER.debug(f"chan_to_scn_proxy: {self.hub.chan_to_scn_proxy[chan_to_scn_id]}")
+        # LOGGER.debug(f"chan_to_scn_id: {chan_to_scn_id}")
+        # LOGGER.debug(f"chan_to_scn_proxy: {self.hub.chan_to_scn_proxy[chan_to_scn_id]}")
         if self.hub._use_chan_to_scn_proxy and chan_to_scn_id in self.hub.chan_to_scn_proxy:
             await tcp_send_message(self.hub.writer,f"$SCNRECALLX,{self.hub.chan_to_scn_proxy[chan_to_scn_id]},0,0;")
             # LOGGER.debug(f"TCP tx: $SCNRECALLX,{self.hub.chan_to_scn_proxy[chan_to_scn_id]},0,0;")
