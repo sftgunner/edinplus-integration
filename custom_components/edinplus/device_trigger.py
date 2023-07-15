@@ -1,3 +1,7 @@
+"""Device triggers for the eDIN+ HomeAssistant integration."""
+
+# This handles inputs from the NPU, and presents them to the user as events assigned to devices, which makes them easier to incorporate in automations etc
+
 from __future__ import annotations
 
 import voluptuous as vol
@@ -23,16 +27,18 @@ from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.typing import ConfigType
 
-from .const import DOMAIN, EDINPLUS_EVENT
+from .const import DOMAIN, EDINPLUS_EVENT # This line can probably be removed (superceded by line 11)
 
+# Define the possible trigger types (to maintain HA syntax) as the list of different newstates
 TRIGGER_TYPES = NEWSTATE_TO_BUTTONEVENT.values()
 
+# Limit the devices that can have input events to the button plates (2) and EVO contact input module (9). 
+# This should probably be extended to 15 (the eDIN I/O module) once able to verify functionality with hardware
 INPUT_MODELS = {DEVCODE_TO_PRODNAME[2],DEVCODE_TO_PRODNAME[9]}
 
-LOGGER = logging.getLogger(__name__)
+LOGGER = logging.getLogger(__name__) # Should replace __name__ with DOMAIN imported from const.py for consistency 
 
 # Set the trigger types to the different types of button event (imported from const.py)
-
 TRIGGER_SCHEMA = DEVICE_TRIGGER_BASE_SCHEMA.extend(
     {
         vol.Required(CONF_DOMAIN): DOMAIN,
@@ -50,6 +56,7 @@ async def async_get_triggers(
     # if device_entry is None:
     #     raise DeviceNotFound(f"Device ID {device_id} is not valid")
     if device_entry.model not in INPUT_MODELS:
+        # Flag any inputs from unsupported devices in logs and then drop
         LOGGER.debug(f"[INVALID FOR INPUT] Device entry model is {device_entry.model}")
         return []
     LOGGER.debug(f"[VALID] Device entry model is {device_entry.model}")
@@ -64,6 +71,7 @@ async def async_get_triggers(
     ]
 
 
+# The async_attach_trigger has been mostly left as in the example code provided by HomeAssistant
 async def async_attach_trigger(
     hass: HomeAssistant,
     config: ConfigType,
@@ -84,42 +92,3 @@ async def async_attach_trigger(
     return await event_trigger.async_attach_trigger(
         hass, event_config, action, trigger_info, platform_type="device"
     )
-
-# async def async_get_triggers(hass, device_id):
-#     """Return a list of triggers."""
-#     LOGGER.debug("Getting triggers")
-
-#     device_registry = await hass.helpers.device_registry.async_get_registry()
-#     device = device_registry.async_get(device_id)
-
-#     triggers = []
-
-#     # Determine which triggers are supported by this device_id ...
-
-#     triggers.append({
-#         # Required fields of TRIGGER_BASE_SCHEMA
-#         CONF_PLATFORM: "device",
-#         CONF_DOMAIN: "edinplus",
-#         CONF_DEVICE_ID: device_id,
-#         # Required fields of TRIGGER_SCHEMA
-#         CONF_TYPE: "Press-on",
-#     })
-
-#     return triggers
-
-
-
-# # This looks like it can mostly be kept stock
-# async def async_attach_trigger(hass, config, action, trigger_info):
-#     """Attach a trigger."""
-#     event_config = event_trigger.TRIGGER_SCHEMA({
-#         event_trigger.CONF_PLATFORM: CONF_EVENT,
-#         event_trigger.CONF_EVENT_TYPE: "edinplus_event",
-#         event_trigger.CONF_EVENT_DATA: {
-#             CONF_DEVICE_ID: config[CONF_DEVICE_ID],
-#             CONF_TYPE: config[CONF_TYPE],
-#         },
-#     }
-#     return await event_trigger.async_attach_trigger(
-#         hass, event_config, action, trigger_info, platform_type="device"
-#     )

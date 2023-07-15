@@ -2,7 +2,7 @@
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 
-Tested on HA 2022.12.6 - 2023.3 and eDIN+ firmware SW00120.2.4.1.44
+Tested on HA 2022.12.6 - 2023.7 and eDIN+ firmware SW00120.2.4.1.44. Please note eDIN+ firmware SW00.120.2.3.x.x is NOT currently supported.
 
 The state of this component is: Local Push
 
@@ -68,7 +68,7 @@ HomeAssistant will then automatically discover all devices connected to the NPU,
 The following modules/controls have been verified to work correctly with this integration
 - Network Processor Module (DIN-NPU-00-01-PLUS) **REQUIRED**
 - 8 Channel Dimmer Module (DIN-02-08-PLUS)
-- Input-Output Module (DIN-INT-00-08-PLUS)
+- Evo Contact Input Module (EVO-INT_CI_xx)
 - 10 Button Geneva Control Plate (GVA-SGP-55) :warning: **PARTIAL SUPPORT**
 
 ## eDIN+

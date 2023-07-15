@@ -1,10 +1,10 @@
-"""Constants for the eDIN+ integration."""
+"""Constants for the eDIN+ HomeAssistant integration."""
+
+# Devcodes, product names, status codes etc imported from Gateway Interface v2.0.3 (courtesy of Mode Lighting)
 
 DOMAIN = "edinplus"
 
-EDINPLUS_EVENT = f"{DOMAIN}_event"
-
-# Define consts
+EDINPLUS_EVENT = f"{DOMAIN}_event" # Used for button presses (i.e. non-feedback based input from NPU)
 
 DEVCODE_TO_PRODCODE = {
     1: "EVO-LCD-55",
@@ -22,6 +22,7 @@ DEVCODE_TO_PRODCODE = {
     144: "DIN-RP-05-04",
     145: "DIN-UBC-01-05",
 }
+
 DEVCODE_TO_PRODNAME = {
     1: "LCD Wall Plate",
     2: "2, 5 and 10 button Wall Plates, Coolbrium & Icon plates",
@@ -38,6 +39,7 @@ DEVCODE_TO_PRODNAME = {
     144: "eDIN 5A 4 channel mains sync relay module",
     145: "eDIN Universal Ballast Control 2 module",
 }
+
 NEWSTATE_TO_BUTTONEVENT = {
     0: "Release-off",
     1: "Press-on",
