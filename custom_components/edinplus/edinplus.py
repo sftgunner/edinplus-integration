@@ -276,8 +276,8 @@ class edinplus_NPU_instance:
         # For production, ideally only keep tcp alive every half hour (as NPU will terminate TCP stream if no activity for 60 minutes)
         # However, for debugging/development, this has been set to every 10 seconds (especially useful for trying to test the ability of the integration to recover when the NPU goes offline and then later online.
         
-        # async_track_time_interval(hass,self.async_keep_tcp_alive, datetime.timedelta(minutes=30)) # Production
-        async_track_time_interval(hass,self.async_keep_tcp_alive, datetime.timedelta(seconds=10)) # Development
+        async_track_time_interval(hass,self.async_keep_tcp_alive, datetime.timedelta(minutes=30)) # Production
+        # async_track_time_interval(hass,self.async_keep_tcp_alive, datetime.timedelta(seconds=10)) # Development
 
 
     async def async_edinplus_discover_channels(self,config_entry: ConfigEntry,):
@@ -344,6 +344,10 @@ class edinplus_NPU_instance:
                 input_entity['name'] = input.split(',')[5]
                 input_entity['area'] = areas[int(input.split(',')[4])]
                 input_entity['full_name'] = f"{input_entity['area']} {input_entity['name']} switch"
+            elif input_entity['devcode'] == 15: # I/O module
+                input_entity['name'] = input.split(',')[5]
+                input_entity['area'] = areas[int(input.split(',')[4])]
+                input_entity['full_name'] = f"{input_entity['area']} {input_entity['name']} switch"
             elif input_entity['devcode'] == 2: # Wall plate
                 # NB there is currently no way of telling how many buttons a wall plate has from this discovery method - this is a known issue that has been discussed with Mode Lighting
                 input_entity['name'] = plate_names[int(input.split(',')[1])]
@@ -352,9 +356,10 @@ class edinplus_NPU_instance:
                 input_entity['full_name'] = f"{input_entity['area']} {input_entity['name']} button {input_entity['channel']}" # This needs to be reviewed - a keypad should only appear once, rather than having each individual button listed as a device (although this adds complexity to device_trigger as possible events need to be extended as e.g. Release-off button1, release-off button2 etc)
             else:
                 # This should probably go through error handling rather than being blindly created, as it's an unknown device, and almost certainly won't work properly with the device trigger
-                input_entity['name'] = input.split(',')[5]
-                input_entity['area'] = areas[int(input.split(',')[4])]
-                input_entity['full_name'] = f"{input_entity['area']} {input_entity['name']} switch"
+                LOGGER.warning(f"Unknown input entity of type {DEVCODE_TO_PRODNAME[input_entity['devcode']]} found as {input_entity['name']} with id {input_entity['id']}")
+                # input_entity['name'] = input.split(',')[5]
+                # input_entity['area'] = areas[int(input.split(',')[4])]
+                # input_entity['full_name'] = f"{input_entity['area']} {input_entity['name']} switch"
             
             LOGGER.debug(f"Input entity found {input_entity['name']} with id {input_entity['id']}")
 
@@ -373,6 +378,7 @@ class edinplus_NPU_instance:
     
     
     async def async_edinplus_map_chans_to_scns_legacy(self):
+        LOGGER.warning("!Using deprecated channel to scene proxy function")
         # Search for any scenes that only have a single channel, and use as a proxy for channels where possible (as this works better with mode inputs)
         # NB this needs to be improved such that only scenes with 100% brightness are used as a proxy (and only the first scene that matches - see issue open on GitHub)
         chan_to_scn_proxy = {}
@@ -398,10 +404,6 @@ class edinplus_NPU_instance:
         chan_to_scn_proxy = {}
         NPU_data = await async_retrieve_from_npu(f"http://{self._hostname}/info?what=levels")
 
-        LOGGER.debug("Outputting retrieved channel information, to ensure that it's all correct")
-
-        LOGGER.debug(NPU_data)
-
         # !Scene,SceneNum,AreaNum,SceneName
         # !ScnFade,SceneNum,Fadetime(ms)
         # !ScnChannel,SceneNum,Address,DevCode,ChanNum,Level
@@ -412,7 +414,7 @@ class edinplus_NPU_instance:
             sceneID = proxy_combo[0]
             addr = proxy_combo[1].zfill(3)
             chan_num = proxy_combo[2].zfill(3)
-            
+
             chan_to_scn_proxy[f"{addr}-{chan_num}"] = int(sceneID)
 
         LOGGER.debug("Have completed channel to scene proxy mapping (using v2):")
