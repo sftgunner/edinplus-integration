@@ -10,6 +10,7 @@ import logging
 import time
 import aiohttp
 import datetime
+import re
 
 from homeassistant.core import HomeAssistant
 
@@ -40,6 +41,14 @@ async def tcp_recieve_message(reader):
     data = await reader.readline()
     return data.decode()
 
+# Async method of interrogating NPU via HTTP. 
+# Used for discovery only
+async def async_retrieve_from_npu(endpoint):
+    async with aiohttp.ClientSession() as session:
+        async with session.get(endpoint) as resp:
+            response = await resp.text()
+    return response
+
 # Old TCP test function to try and write to TCP stream and immediately read acknowledgement (to verify change had been written correctly)
 # Unfortunately didn't work due to conflicts with existing pending tcp_receive_message
 async def tcp_send_message_plus(writer,reader,message):
@@ -60,14 +69,6 @@ async def tcp_send_message_plus(writer,reader,message):
 async def async_send_to_npu(endpoint,data):
     async with aiohttp.ClientSession() as session:
         async with session.post(endpoint,data=data) as resp:
-            response = await resp.text()
-    return response.splitlines()
-
-# Async method of interrogating NPU via HTTP. 
-# !! This should be deprecated in favour of tcp_recieve_message above
-async def async_retrieve_from_npu(endpoint):
-    async with aiohttp.ClientSession() as session:
-        async with session.get(endpoint) as resp:
             response = await resp.text()
     return response.splitlines()
 
@@ -220,6 +221,7 @@ class edinplus_NPU_instance:
                 self._hass.bus.fire(EDINPLUS_EVENT, {CONF_DEVICE_ID: device_entry.id, CONF_TYPE: newstate})
 
             elif (response_type == '!CHANFADE')or(response_type == '!CHANLEVEL'):
+                LOGGER.debug(f"Chanfade/level recieved on TCP channel: {response}")
                 # CHANFADE/LEVEL corresponds to a lighting channel
                 for light in self.lights:
                     if light.channel == int(response.split(',')[3]):
@@ -291,7 +293,9 @@ class edinplus_NPU_instance:
 
         # Run initial discovery using HTTP to establish what exists on the eDIN+ system linked to the NPU (returned in CSV format)
         dimmer_channel_instances = []
-        NPU_data = await async_retrieve_from_npu(f"http://{self._hostname}/info?what=names")
+        NPU_raw = await async_retrieve_from_npu(f"http://{self._hostname}/info?what=names")
+
+        NPU_data = NPU_raw.splitlines()
 
         areas_csv = [idx for idx in NPU_data if idx.startswith("AREA")]
 
@@ -368,7 +372,7 @@ class edinplus_NPU_instance:
         return dimmer_channel_instances
     
     
-    async def async_edinplus_map_chans_to_scns(self):
+    async def async_edinplus_map_chans_to_scns_legacy(self):
         # Search for any scenes that only have a single channel, and use as a proxy for channels where possible (as this works better with mode inputs)
         # NB this needs to be improved such that only scenes with 100% brightness are used as a proxy (and only the first scene that matches - see issue open on GitHub)
         chan_to_scn_proxy = {}
@@ -386,6 +390,32 @@ class edinplus_NPU_instance:
                 chan_num = currentChannel[3]
                 chan_to_scn_proxy[f"{addr}-{chan_num}"] = int(sceneID)
         LOGGER.debug("Have completed channel to scene proxy mapping:")
+        LOGGER.debug(chan_to_scn_proxy)
+        return chan_to_scn_proxy
+
+    async def async_edinplus_map_chans_to_scns(self):
+        # An updated version of the above function, but now using the info?what=levels endpoint instead, as this ensures that scenes with a level of 0% aren't mapped
+        chan_to_scn_proxy = {}
+        NPU_data = await async_retrieve_from_npu(f"http://{self._hostname}/info?what=levels")
+
+        LOGGER.debug("Outputting retrieved channel information, to ensure that it's all correct")
+
+        LOGGER.debug(NPU_data)
+
+        # !Scene,SceneNum,AreaNum,SceneName
+        # !ScnFade,SceneNum,Fadetime(ms)
+        # !ScnChannel,SceneNum,Address,DevCode,ChanNum,Level
+        possible_proxies = re.findall(rf"SCENE,(\d+),\d+,[\w\s]+,\d+,\d+[\s]+SCNCHANLEVEL,\d,(\d+),\d+,(\d+),255\s",NPU_data)
+        # Will return all possible proxies in sequence: Scene number, Address, ChanNum
+
+        for proxy_combo in possible_proxies:
+            sceneID = proxy_combo[0]
+            addr = proxy_combo[1].zfill(3)
+            chan_num = proxy_combo[2].zfill(3)
+            
+            chan_to_scn_proxy[f"{addr}-{chan_num}"] = int(sceneID)
+
+        LOGGER.debug("Have completed channel to scene proxy mapping (using v2):")
         LOGGER.debug(chan_to_scn_proxy)
         return chan_to_scn_proxy
 
