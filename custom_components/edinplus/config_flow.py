@@ -1,4 +1,4 @@
-"""Config flow for Hello World integration."""
+"""Config flow for the eDIN+ (by Mode Lighting) HomeAssistant integration."""
 from __future__ import annotations
 
 import logging
@@ -9,15 +9,16 @@ import voluptuous as vol
 from homeassistant import config_entries, exceptions
 from homeassistant.core import HomeAssistant
 
-#from .const import DOMAIN  # pylint:disable=unused-import
 from .edinplus import edinplus_NPU_instance
 
 # Import constants
 from .const import DOMAIN
 
-_LOGGER = logging.getLogger(__name__)
+_LOGGER = logging.getLogger(__name__) # Should replace __name__ with DOMAIN imported from constants
 
 # This is the schema that used to display the UI to the user.
+# At the moment user is just asked for the NPU address.
+# In future it could be useful to add support for username/password if setup on NPU
 DATA_SCHEMA = vol.Schema({("host"): str})
 
 async def validate_input(hass: HomeAssistant, data: dict) -> dict[str, Any]:
@@ -25,17 +26,20 @@ async def validate_input(hass: HomeAssistant, data: dict) -> dict[str, Any]:
 
     Data has the keys from DATA_SCHEMA with values provided by the user.
     """
+    
     # Validate the data can be used to set up a connection.
 
     # This is a simple example to show an error in the UI for a short hostname
     # The exceptions are defined at the end of this file, and are used in the
     # `async_step_user` method below.
+    # This has been left from the example - could be changed to validate that it is a valid IP or DNS address
     if len(data["host"]) < 3:
         raise InvalidHost
 
+    # NPU instance is initialised (see edinplus.py for more details)
+    # This really ought to go through some verification to ensure the NPU is where it says it is, and supports TCP/HTTP without username/password
+    # Have left example code below commented out for reference
     hub = edinplus_NPU_instance(hass, data["host"],None)
-    # Now we need to initialise the lights
-    # await hub.discover()
     
     # # The dummy hub provides a `test_connection` method to ensure it's working
     # # as expected
@@ -44,12 +48,6 @@ async def validate_input(hass: HomeAssistant, data: dict) -> dict[str, Any]:
     #     # If there is an error, raise an exception to notify HA that there was a
     #     # problem. The UI will also show there was a problem
     #     raise CannotConnect
-
-    # If your PyPI package is not built with async, pass your methods
-    # to the executor:
-    # await hass.async_add_executor_job(
-    #     your_validate_func, data["username"], data["password"]
-    # )
 
     # If you cannot connect:
     # throw CannotConnect
@@ -67,10 +65,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain="edinplus"):
     """Handle a config flow for eDIN+."""
 
     VERSION = 1
-    # Pick one of the available connection classes in homeassistant/config_entries.py
-    # This tells HA if it should be asking for updates, or it'll be notified of updates
-    # automatically. This example uses PUSH, as the dummy hub will notify HA of
-    # changes.
+    # Define connection class (defined in homeassistant/config_entries.py) as Local Polling
+    # This should be changed to Local Push, as the TCP stream method means HA is informed by the NPU of any changes
     CONNECTION_CLASS = config_entries.CONN_CLASS_LOCAL_POLL
 
     async def async_step_user(self, user_input=None):

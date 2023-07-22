@@ -1,4 +1,4 @@
-"""Platform for light integration."""
+"""Light platform for the eDIN+ HomeAssistant integration."""
 from __future__ import annotations
 
 from typing import Any
@@ -23,14 +23,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
-_LOGGER = logging.getLogger("edinplus")
-
-# # Validation of the user's configuration
-# PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
-#     vol.Optional(CONF_NAME): cv.string,
-#     vol.Required(CONF_IP_ADDRESS): cv.string,
-# })
-
+_LOGGER = logging.getLogger("edinplus") # Should use DOMAIN imported from const
 
 # This function is called as part of the __init__.async_setup_entry (via the
 # hass.config_entries.async_forward_entry_setup call)
@@ -48,7 +41,7 @@ async def async_setup_entry(
     async_add_entities(EdinPlusLightChannel(light) for light in npu.lights)
 
 class EdinPlusLightChannel(LightEntity):
-    """Representation of an Edin Light Channel."""
+    """Representation of an Edin Dimmable Light Channel."""
 
     should_poll = False
 
@@ -76,11 +69,6 @@ class EdinPlusLightChannel(LightEntity):
         # The opposite of async_added_to_hass. Remove any registered call backs here.
         self._light.remove_callback(self.async_write_ha_state)
 
-    # @property
-    # def name(self) -> str:
-    #     """Return the display name of this light."""
-    #     return self._name
-
     @property
     def device_info(self) -> DeviceInfo:
         """Return the device info"""
@@ -93,11 +81,6 @@ class EdinPlusLightChannel(LightEntity):
                 suggested_area=self._light.area,
                 via_device=(DOMAIN,self._light.hub._id),
         )
-
-    # @property
-    # def unique_id(self) -> str:
-    #     """Return the unique identifier for this light."""
-    #     return self._unique_id
 
     @property
     def brightness(self):
@@ -126,7 +109,6 @@ class EdinPlusLightChannel(LightEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Instruct the light to turn on."""
-        _LOGGER.debug("Attempting light turn on")
         
         if ATTR_BRIGHTNESS in kwargs:
             await self._light.set_brightness(kwargs.get(ATTR_BRIGHTNESS, 255))
@@ -143,8 +125,8 @@ class EdinPlusLightChannel(LightEntity):
 
         This is the only method that should fetch new data for Home Assistant.
         """
-        # This should no longer be used
-        LOGGER.warning("async update performed")
+        # This should no longer be used, as this relies on HTTP rather than the TCP stream
+        _LOGGER.warning("async HTTP update performed - this action should be updated to use the TCP stream")
         self._brightness = await self._light.get_brightness()
         if int(self._brightness) > 0:
             self._state = True
