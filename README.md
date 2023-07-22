@@ -2,7 +2,9 @@
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 
-Tested on HA 2022.12.6 - 2023.7 and eDIN+ firmware SW00120.2.4.1.44. Please note eDIN+ firmware SW00.120.2.3.x.x is NOT currently supported.
+Tested on HA 2022.12.6 - 2023.7 and eDIN+ firmware SW00120.2.4.1.44. 
+
+Please note eDIN+ firmware SW00.120.2.3.x.x is **NOT** currently supported.
 
 The state of this component is: Local Push
 
