@@ -27,11 +27,11 @@ from homeassistant.const import (
 # Import constants
 from .const import *
 
-LOGGER = logging.getLogger(__name__) # This should use DOMAIN, rather than __name__
+LOGGER = logging.getLogger(__name__)
 
 # Interact with NPU using the TCP stream (the writer object should be stored in the NPU class)
 async def tcp_send_message(writer,message):
-    LOGGER.debug(f'Sending: {message!r}')
+    LOGGER.debug(f'TCP TX: {message!r}')
     writer.write(message.encode())
     await writer.drain()
     
@@ -98,6 +98,7 @@ class edinplus_NPU_instance:
         self._callbacks = set()
         self._use_chan_to_scn_proxy = True # This should be offered in config flow (although not sure why you would ever not want it)
         self.chan_to_scn_proxy = {}
+        self.chan_to_scn_proxy_fadetime = {}
         self.online = False
         self.comms_retry_attempts = 0 
         self.comms_max_retry_attempts = 5 # The number of retries before we try and re-establish the TCP connection
@@ -107,7 +108,7 @@ class edinplus_NPU_instance:
         # Discover all lighting channels on devices connected to NPU
         self.lights = await self.async_edinplus_discover_channels(config_entry)
         # Search to see if a channel has a unique scene with just it in - if so, toggle that scene rather than the channel (as keeps NPU happier!)
-        self.chan_to_scn_proxy = await self.async_edinplus_map_chans_to_scns()
+        self.chan_to_scn_proxy,self.chan_to_scn_proxy_fadetime = await self.async_edinplus_map_chans_to_scns()
         # Get the status for each light
         for light in self.lights:
             await light.tcp_force_state_inform()
@@ -130,10 +131,13 @@ class edinplus_NPU_instance:
             await tcp_send_message(self.writer,'$EVENTS,1;')
             output = await tcp_recieve_message(self.reader)
             # Output should be !GATRDY; if all ok with the TCP connection
-            if output.rstrip() == "!GATRDY;":
+
+            if output.rstrip() == "":
+                LOGGER.error(f"eDIN+ integration not getting any TCP response from the NPU.")
+            elif output.rstrip() == "!GATRDY;":
                 LOGGER.info("TCP connection ready")
             else:
-                LOGGER.warn(f"TCP connection not ready: {output}")
+                LOGGER.error(f"TCP connection not ready; received message: {output}")
 
     async def async_keep_tcp_alive(self,now=None):
         # This serves two purposes - to keep the connection alive and also to check that it hasn't been terminated at the other end
@@ -225,9 +229,10 @@ class edinplus_NPU_instance:
                 # CHANFADE/LEVEL corresponds to a lighting channel
                 for light in self.lights:
                     if light.channel == int(response.split(',')[3]):
-                        light._brightness = int(response.split(',')[4])
-                        LOGGER.info(f"Found light on channel {light.channel}. Writing existing brightness {light._brightness} to it in HA")
+                        LOGGER.info(f"Found light corresponding to channel {light.channel} in HA. Writing observed brightness {light._brightness}")
                         light._is_on = (int(response.split(',')[4]) > 0)
+                        light._brightness = int(response.split(',')[4])
+
                         for callback in light._callbacks:
                             callback()
                         # light.update_callback()
@@ -249,8 +254,16 @@ class edinplus_NPU_instance:
                 statuscode = int(response.split(',')[4].split(';')[0])
                 if statuscode != 0:
                     LOGGER.warning(f"Module error on channel number [{chan_num}] (found on device {dev} @ address [{addr}]: {STATUSCODE_TO_SUMMARY[statuscode]} ({STATUSCODE_TO_DESC[statuscode]})")
+            elif(response_type == '!OK'):
+                LOGGER.debug(f"NPU acknowledgement: {response}")
+            elif(response_type == '!SCNOFF'):
+                LOGGER.debug(f"NPU confirmed scene {response.split(',')[1].split(';')[0]} is now off")
+            elif(response_type == '!SCNRECALL'):
+                LOGGER.debug(f"NPU confirmed scene {response.split(',')[1].split(';')[0]} has been recalled (i.e. is on)")
+            elif(response_type == '!SCNSTATE'):
+                LOGGER.debug(f"NPU confirmed scene {response.split(',')[1]} has been set to {round(int(response.split(',')[3])/2.55)}% of max scene brightness")
             else:
-                LOGGER.debug(f"Unknown message recieved on TCP channel: {response}")
+                LOGGER.debug(f"!UNKNOWN TCP RX: {response}")
 
     async def async_monitor_tcp(self,now=None):
         # This is the function that keeps track of any new messages on the TCP stream, triggered every 0.01s by the function monitor below
@@ -276,8 +289,8 @@ class edinplus_NPU_instance:
         # For production, ideally only keep tcp alive every half hour (as NPU will terminate TCP stream if no activity for 60 minutes)
         # However, for debugging/development, this has been set to every 10 seconds (especially useful for trying to test the ability of the integration to recover when the NPU goes offline and then later online.
         
-        # async_track_time_interval(hass,self.async_keep_tcp_alive, datetime.timedelta(minutes=30)) # Production
-        async_track_time_interval(hass,self.async_keep_tcp_alive, datetime.timedelta(seconds=10)) # Development
+        async_track_time_interval(hass,self.async_keep_tcp_alive, datetime.timedelta(minutes=30)) # Production
+        # async_track_time_interval(hass,self.async_keep_tcp_alive, datetime.timedelta(seconds=10)) # Development
 
 
     async def async_edinplus_discover_channels(self,config_entry: ConfigEntry,):
@@ -344,6 +357,10 @@ class edinplus_NPU_instance:
                 input_entity['name'] = input.split(',')[5]
                 input_entity['area'] = areas[int(input.split(',')[4])]
                 input_entity['full_name'] = f"{input_entity['area']} {input_entity['name']} switch"
+            elif input_entity['devcode'] == 15: # I/O module
+                input_entity['name'] = input.split(',')[5]
+                input_entity['area'] = areas[int(input.split(',')[4])]
+                input_entity['full_name'] = f"{input_entity['area']} {input_entity['name']} switch"
             elif input_entity['devcode'] == 2: # Wall plate
                 # NB there is currently no way of telling how many buttons a wall plate has from this discovery method - this is a known issue that has been discussed with Mode Lighting
                 input_entity['name'] = plate_names[int(input.split(',')[1])]
@@ -352,9 +369,10 @@ class edinplus_NPU_instance:
                 input_entity['full_name'] = f"{input_entity['area']} {input_entity['name']} button {input_entity['channel']}" # This needs to be reviewed - a keypad should only appear once, rather than having each individual button listed as a device (although this adds complexity to device_trigger as possible events need to be extended as e.g. Release-off button1, release-off button2 etc)
             else:
                 # This should probably go through error handling rather than being blindly created, as it's an unknown device, and almost certainly won't work properly with the device trigger
-                input_entity['name'] = input.split(',')[5]
-                input_entity['area'] = areas[int(input.split(',')[4])]
-                input_entity['full_name'] = f"{input_entity['area']} {input_entity['name']} switch"
+                LOGGER.warning(f"Unknown input entity of type {DEVCODE_TO_PRODNAME[input_entity['devcode']]} found as {input_entity['name']} with id {input_entity['id']}")
+                # input_entity['name'] = input.split(',')[5]
+                # input_entity['area'] = areas[int(input.split(',')[4])]
+                # input_entity['full_name'] = f"{input_entity['area']} {input_entity['name']} switch"
             
             LOGGER.debug(f"Input entity found {input_entity['name']} with id {input_entity['id']}")
 
@@ -373,6 +391,7 @@ class edinplus_NPU_instance:
     
     
     async def async_edinplus_map_chans_to_scns_legacy(self):
+        LOGGER.warning("!Using deprecated channel to scene proxy function")
         # Search for any scenes that only have a single channel, and use as a proxy for channels where possible (as this works better with mode inputs)
         # NB this needs to be improved such that only scenes with 100% brightness are used as a proxy (and only the first scene that matches - see issue open on GitHub)
         chan_to_scn_proxy = {}
@@ -396,28 +415,30 @@ class edinplus_NPU_instance:
     async def async_edinplus_map_chans_to_scns(self):
         # An updated version of the above function, but now using the info?what=levels endpoint instead, as this ensures that scenes with a level of 0% aren't mapped
         chan_to_scn_proxy = {}
+        chan_to_scn_proxy_fadetime = {}
         NPU_data = await async_retrieve_from_npu(f"http://{self._hostname}/info?what=levels")
-
-        LOGGER.debug("Outputting retrieved channel information, to ensure that it's all correct")
-
-        LOGGER.debug(NPU_data)
 
         # !Scene,SceneNum,AreaNum,SceneName
         # !ScnFade,SceneNum,Fadetime(ms)
         # !ScnChannel,SceneNum,Address,DevCode,ChanNum,Level
-        possible_proxies = re.findall(rf"SCENE,(\d+),\d+,[\w\s]+,\d+,\d+[\s]+SCNCHANLEVEL,\d,(\d+),\d+,(\d+),255\s",NPU_data)
-        # Will return all possible proxies in sequence: Scene number, Address, ChanNum
+        # possible_proxies = re.findall(rf"SCENE,(\d+),\d+,[\w\s]+,\d+,\d+[\s]+SCNCHANLEVEL,\d,(\d+),\d+,(\d+),255\s",NPU_data)
+        possible_proxies = re.findall(rf"SCENE,(\d+),\d+,[\w\s]+SCNFADE,\d+,(\d+)[\s]+SCNCHANLEVEL,\d,(\d+),\d+,(\d+),255\s",NPU_data)
+        # Will return all possible proxies in sequence: Scene number, FadeTime, Address, ChanNum
 
         for proxy_combo in possible_proxies:
             sceneID = proxy_combo[0]
-            addr = proxy_combo[1].zfill(3)
-            chan_num = proxy_combo[2].zfill(3)
-            
+            fadeTime = proxy_combo[1]
+            addr = proxy_combo[2].zfill(3)
+            chan_num = proxy_combo[3].zfill(3)
+
             chan_to_scn_proxy[f"{addr}-{chan_num}"] = int(sceneID)
+            chan_to_scn_proxy_fadetime[f"{addr}-{chan_num}"] = int(fadeTime)
 
         LOGGER.debug("Have completed channel to scene proxy mapping (using v2):")
         LOGGER.debug(chan_to_scn_proxy)
-        return chan_to_scn_proxy
+        LOGGER.debug("Have also found default fadetimes for scene proxy mapping:")
+        LOGGER.debug(chan_to_scn_proxy_fadetime)
+        return chan_to_scn_proxy,chan_to_scn_proxy_fadetime
 
 class edinplus_dimmer_channel_instance:
     # Create a class for a dimmer channel (i.e. variable brightness, but no colour/temperature control)
@@ -456,22 +477,17 @@ class edinplus_dimmer_channel_instance:
     async def set_brightness(self, intensity: int):
         chan_to_scn_id = f"{str(self._dimmer_address).zfill(3)}-{str(self._channel).zfill(3)}"
         if self.hub._use_chan_to_scn_proxy and chan_to_scn_id in self.hub.chan_to_scn_proxy:
-            await tcp_send_message(self.hub.writer,f"$SCNRECALLX,{self.hub.chan_to_scn_proxy[chan_to_scn_id]},{str(intensity)},0;")
-            LOGGER.debug(f"TCP tx: $SCNRECALLX,{self.hub.chan_to_scn_proxy[chan_to_scn_id]},{str(intensity)},0;")
-            LOGGER.debug(await tcp_recieve_message(self.hub.reader))
+            await tcp_send_message(self.hub.writer,f"$SCNRECALLX,{self.hub.chan_to_scn_proxy[chan_to_scn_id]},{str(intensity)},{self.hub.chan_to_scn_proxy_fadetime[chan_to_scn_id]};")
         else:
             await tcp_send_message(self.hub.writer,f"$ChanFade,{self._dimmer_address},{self._devcode},{self._channel},{str(intensity)},0;")
-            LOGGER.debug(f"TCP tx: $ChanFade,{self._dimmer_address},{self._devcode},{self._channel},{str(intensity)},0;")
-            LOGGER.debug(await tcp_recieve_message(self.hub.reader))
         self._brightness = intensity
 
     async def turn_on(self):
         chan_to_scn_id = f"{str(self._dimmer_address).zfill(3)}-{str(self._channel).zfill(3)}"
         if self.hub._use_chan_to_scn_proxy and chan_to_scn_id in self.hub.chan_to_scn_proxy:
-            await tcp_send_message(self.hub.writer,f"$SCNRECALLX,{self.hub.chan_to_scn_proxy[chan_to_scn_id]},255,0;")
-            LOGGER.debug(f"TCP tx: $SCNRECALLX,{self.hub.chan_to_scn_proxy[chan_to_scn_id]},255,0;")
+            await tcp_send_message(self.hub.writer,f"$SCNRECALL,{self.hub.chan_to_scn_proxy[chan_to_scn_id]};")
             # Code below was an attempt to verify changes had been written correctly, but due to async nature, doesn't seem to work - further investigation required
-            expectedResponse = f"!OK,SCNRECALLX,{self.hub.chan_to_scn_proxy[chan_to_scn_id]:05d},255,00000000;"
+            expectedResponse = f"!OK,SCNRECALL,{self.hub.chan_to_scn_proxy[chan_to_scn_id]:05d};"
             # time.sleep(0.02)
             # LOGGER.debug(f"Expected: {expectedResponse}")
             # if expectedResponse in self.hub.queuedresponses:
@@ -487,14 +503,15 @@ class edinplus_dimmer_channel_instance:
     async def turn_off(self):
         chan_to_scn_id = f"{str(self._dimmer_address).zfill(3)}-{str(self._channel).zfill(3)}"
         if self.hub._use_chan_to_scn_proxy and chan_to_scn_id in self.hub.chan_to_scn_proxy:
-            await tcp_send_message(self.hub.writer,f"$SCNRECALLX,{self.hub.chan_to_scn_proxy[chan_to_scn_id]},0,0;")
+            await tcp_send_message(self.hub.writer,f"$SCNOFF,{self.hub.chan_to_scn_proxy[chan_to_scn_id]};")
         else:
             await tcp_send_message(self.hub.writer,f"$ChanFade,{self._dimmer_address},{self._devcode},{self._channel},0,0;")
         self._is_on = False
 
     async def tcp_force_state_inform(self):
         # A function to force a channel to report its current status to the TCP stream
-        LOGGER.debug(f"?CHAN,{self._dimmer_address},{self._devcode},{self._channel};")
+        # LOGGER.debug(f"?CHAN,{self._dimmer_address},{self._devcode},{self._channel};")
+        LOGGER.debug(f"Forcing state inform for address-channel: {self._dimmer_address},{self._channel}")
         await tcp_send_message(self.hub.writer,f"?CHAN,{self._dimmer_address},{self._devcode},{self._channel};")
     
     async def get_brightness(self):

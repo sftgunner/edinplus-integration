@@ -34,9 +34,9 @@ TRIGGER_TYPES = NEWSTATE_TO_BUTTONEVENT.values()
 
 # Limit the devices that can have input events to the button plates (2) and EVO contact input module (9). 
 # This should probably be extended to 15 (the eDIN I/O module) once able to verify functionality with hardware
-INPUT_MODELS = {DEVCODE_TO_PRODNAME[2],DEVCODE_TO_PRODNAME[9]}
+INPUT_MODELS = {DEVCODE_TO_PRODNAME[2],DEVCODE_TO_PRODNAME[9],DEVCODE_TO_PRODNAME[15]}
 
-LOGGER = logging.getLogger(__name__) # Should replace __name__ with DOMAIN imported from const.py for consistency 
+LOGGER = logging.getLogger(__name__)
 
 # Set the trigger types to the different types of button event (imported from const.py)
 TRIGGER_SCHEMA = DEVICE_TRIGGER_BASE_SCHEMA.extend(

@@ -4,7 +4,10 @@ from __future__ import annotations
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 import logging
-LOGGER = logging.getLogger("edinplus")
+# Import constants
+from .const import DOMAIN
+
+LOGGER = logging.getLogger(__name__)
 
 from . import edinplus
 
@@ -16,7 +19,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up NPU from config entry."""
     # This stores an instance of the NPU class that communicates with other devices
     hub = edinplus.edinplus_NPU_instance(hass, entry.data["host"], entry.entry_id)
-    hass.data.setdefault("edinplus", {})[entry.entry_id] = hub
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = hub
     
     LOGGER.debug("Initialised NPU instance")
 
@@ -48,6 +51,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # This has just been left as in the example repo - to be further investigated/improved
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
-        hass.data["edinplus"].pop(entry.entry_id)
+        hass.data[DOMAIN].pop(entry.entry_id)
 
     return unload_ok
