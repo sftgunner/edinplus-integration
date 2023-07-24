@@ -27,7 +27,7 @@ from homeassistant.const import (
 # Import constants
 from .const import *
 
-LOGGER = logging.getLogger(DOMAIN)
+LOGGER = logging.getLogger(__name__)
 
 # Interact with NPU using the TCP stream (the writer object should be stored in the NPU class)
 async def tcp_send_message(writer,message):

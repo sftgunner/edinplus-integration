@@ -14,7 +14,7 @@ from .edinplus import edinplus_NPU_instance
 # Import constants
 from .const import DOMAIN
 
-_LOGGER = logging.getLogger(DOMAIN)
+_LOGGER = logging.getLogger(__name__)
 
 # This is the schema that used to display the UI to the user.
 # At the moment user is just asked for the NPU address.

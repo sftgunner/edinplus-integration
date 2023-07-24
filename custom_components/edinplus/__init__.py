@@ -7,7 +7,7 @@ import logging
 # Import constants
 from .const import DOMAIN
 
-LOGGER = logging.getLogger(DOMAIN)
+LOGGER = logging.getLogger(__name__)
 
 from . import edinplus
 
