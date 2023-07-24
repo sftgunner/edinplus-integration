@@ -131,10 +131,13 @@ class edinplus_NPU_instance:
             await tcp_send_message(self.writer,'$EVENTS,1;')
             output = await tcp_recieve_message(self.reader)
             # Output should be !GATRDY; if all ok with the TCP connection
-            if output.rstrip() == "!GATRDY;":
+
+            if output.rstrip() == "":
+                LOGGER.error(f"eDIN+ integration not getting any TCP response from the NPU.")
+            elif output.rstrip() == "!GATRDY;":
                 LOGGER.info("TCP connection ready")
             else:
-                LOGGER.warn(f"TCP connection not ready: {output}")
+                LOGGER.error(f"TCP connection not ready; received message: {output}")
 
     async def async_keep_tcp_alive(self,now=None):
         # This serves two purposes - to keep the connection alive and also to check that it hasn't been terminated at the other end
@@ -226,9 +229,10 @@ class edinplus_NPU_instance:
                 # CHANFADE/LEVEL corresponds to a lighting channel
                 for light in self.lights:
                     if light.channel == int(response.split(',')[3]):
-                        light._brightness = int(response.split(',')[4])
-                        LOGGER.info(f"Found light on channel {light.channel}. Writing existing brightness {light._brightness} to it in HA")
+                        LOGGER.info(f"Found light corresponding to channel {light.channel} in HA. Writing observed brightness {light._brightness}")
                         light._is_on = (int(response.split(',')[4]) > 0)
+                        light._brightness = int(response.split(',')[4])
+
                         for callback in light._callbacks:
                             callback()
                         # light.update_callback()
@@ -250,8 +254,16 @@ class edinplus_NPU_instance:
                 statuscode = int(response.split(',')[4].split(';')[0])
                 if statuscode != 0:
                     LOGGER.warning(f"Module error on channel number [{chan_num}] (found on device {dev} @ address [{addr}]: {STATUSCODE_TO_SUMMARY[statuscode]} ({STATUSCODE_TO_DESC[statuscode]})")
+            elif(response_type == '!OK'):
+                LOGGER.debug(f"NPU acknowledgement: {response}")
+            elif(response_type == '!SCNOFF'):
+                LOGGER.debug(f"NPU confirmed scene {response.split(',')[1].split(';')[0]} is now off")
+            elif(response_type == '!SCNRECALL'):
+                LOGGER.debug(f"NPU confirmed scene {response.split(',')[1].split(';')[0]} has been recalled (i.e. is on)")
+            elif(response_type == '!SCNSTATE'):
+                LOGGER.debug(f"NPU confirmed scene {response.split(',')[1]} has been set to {round(int(response.split(',')[3])/2.55)}% of max scene brightness")
             else:
-                LOGGER.debug(f"Unknown message recieved on TCP channel: {response}")
+                LOGGER.debug(f"!UNKNOWN TCP RX: {response}")
 
     async def async_monitor_tcp(self,now=None):
         # This is the function that keeps track of any new messages on the TCP stream, triggered every 0.01s by the function monitor below
@@ -498,7 +510,8 @@ class edinplus_dimmer_channel_instance:
 
     async def tcp_force_state_inform(self):
         # A function to force a channel to report its current status to the TCP stream
-        LOGGER.debug(f"?CHAN,{self._dimmer_address},{self._devcode},{self._channel};")
+        # LOGGER.debug(f"?CHAN,{self._dimmer_address},{self._devcode},{self._channel};")
+        LOGGER.debug(f"Forcing state inform for address-channel: {self._dimmer_address},{self._channel}")
         await tcp_send_message(self.hub.writer,f"?CHAN,{self._dimmer_address},{self._devcode},{self._channel};")
     
     async def get_brightness(self):

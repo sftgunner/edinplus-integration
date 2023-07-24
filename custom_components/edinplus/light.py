@@ -23,7 +23,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
-_LOGGER = logging.getLogger(__name__) # Should use DOMAIN imported from const
+LOGGER = logging.getLogger(__name__)
 
 # This function is called as part of the __init__.async_setup_entry (via the
 # hass.config_entries.async_forward_entry_setup call)
@@ -47,7 +47,7 @@ class EdinPlusLightChannel(LightEntity):
 
     def __init__(self, light) -> None:
         """Initialize an eDIN+ Light Channel."""
-        _LOGGER.info(pformat(light))
+        # LOGGER.info(pformat(light))
         self._light = light
         self._attr_name = self._light.name
         self._attr_unique_id = f"{self._light.light_id}_light"
@@ -126,7 +126,7 @@ class EdinPlusLightChannel(LightEntity):
         This is the only method that should fetch new data for Home Assistant.
         """
         # This should no longer be used, as this relies on HTTP rather than the TCP stream
-        _LOGGER.warning("async HTTP update performed - this action should be updated to use the TCP stream")
+        LOGGER.warning("async HTTP update performed - this action should be updated to use the TCP stream")
         self._brightness = await self._light.get_brightness()
         if int(self._brightness) > 0:
             self._state = True
