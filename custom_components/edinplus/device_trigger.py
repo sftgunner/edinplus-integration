@@ -36,7 +36,7 @@ TRIGGER_TYPES = NEWSTATE_TO_BUTTONEVENT.values()
 # This should probably be extended to 15 (the eDIN I/O module) once able to verify functionality with hardware
 INPUT_MODELS = {DEVCODE_TO_PRODNAME[2],DEVCODE_TO_PRODNAME[9],DEVCODE_TO_PRODNAME[15]}
 
-LOGGER = logging.getLogger(__name__) # Should replace __name__ with DOMAIN imported from const.py for consistency 
+LOGGER = logging.getLogger(DOMAIN)
 
 # Set the trigger types to the different types of button event (imported from const.py)
 TRIGGER_SCHEMA = DEVICE_TRIGGER_BASE_SCHEMA.extend(

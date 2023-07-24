@@ -14,7 +14,7 @@ from .edinplus import edinplus_NPU_instance
 # Import constants
 from .const import DOMAIN
 
-_LOGGER = logging.getLogger(__name__) # Should replace __name__ with DOMAIN imported from constants
+_LOGGER = logging.getLogger(DOMAIN)
 
 # This is the schema that used to display the UI to the user.
 # At the moment user is just asked for the NPU address.
@@ -61,7 +61,7 @@ async def validate_input(hass: HomeAssistant, data: dict) -> dict[str, Any]:
     return {"title": data["host"]}
 
 
-class ConfigFlow(config_entries.ConfigFlow, domain="edinplus"):
+class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for eDIN+."""
 
     VERSION = 1

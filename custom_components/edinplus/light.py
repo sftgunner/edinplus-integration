@@ -23,7 +23,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
-_LOGGER = logging.getLogger("edinplus") # Should use DOMAIN imported from const
+_LOGGER = logging.getLogger(DOMAIN) # Should use DOMAIN imported from const
 
 # This function is called as part of the __init__.async_setup_entry (via the
 # hass.config_entries.async_forward_entry_setup call)
@@ -35,7 +35,7 @@ async def async_setup_entry(
     """Add cover for passed config_entry in HA."""
     # The hub is loaded from the associated hass.data entry that was created in the
     # __init__.async_setup_entry function
-    npu = hass.data["edinplus"][config_entry.entry_id]
+    npu = hass.data[DOMAIN][config_entry.entry_id]
 
     # Add all entities to HA
     async_add_entities(EdinPlusLightChannel(light) for light in npu.lights)
@@ -73,7 +73,7 @@ class EdinPlusLightChannel(LightEntity):
     def device_info(self) -> DeviceInfo:
         """Return the device info"""
         return DeviceInfo(
-            identifiers={("edinplus",self._light.light_id)},
+            identifiers={(DOMAIN,self._light.light_id)},
                 name=self.name,
                 sw_version="1.0.0",
                 model=self._light.model,
