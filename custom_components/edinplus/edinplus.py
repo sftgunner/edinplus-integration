@@ -369,9 +369,9 @@ class edinplus_NPU_instance:
                 input_entity['full_name'] = f"{input_entity['area']} {input_entity['name']} button {input_entity['channel']}" # This needs to be reviewed - a keypad should only appear once, rather than having each individual button listed as a device (although this adds complexity to device_trigger as possible events need to be extended as e.g. Release-off button1, release-off button2 etc)
             else:
                 # This should probably go through error handling rather than being blindly created, as it's an unknown device, and almost certainly won't work properly with the device trigger
-                LOGGER.warning(f"Unknown input entity of type {DEVCODE_TO_PRODNAME[input_entity['devcode']]} found as {input_entity['name']} with id {input_entity['id']}")
-                # input_entity['name'] = input.split(',')[5]
-                # input_entity['area'] = areas[int(input.split(',')[4])]
+                input_entity['name'] = input.split(',')[5]
+                input_entity['area'] = areas[int(input.split(',')[4])]
+                LOGGER.warning(f"Unknown input entity of type {DEVCODE_TO_PRODNAME[input_entity['devcode']]} found in area {input_entity['area']} as {input_entity['name']} with id {input_entity['id']}")
                 # input_entity['full_name'] = f"{input_entity['area']} {input_entity['name']} switch"
             
             LOGGER.debug(f"Input entity found {input_entity['name']} with id {input_entity['id']}")
