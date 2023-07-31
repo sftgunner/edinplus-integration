@@ -64,15 +64,17 @@ HomeAssistant will then automatically discover all devices connected to the NPU,
 - Autodiscover of all channels configured in NPU
 - Dimmer channels from eDIN 2A 8 channel dimmer module (DIN-02-08) are imported as 8 individual lights, with full dimmable control.
 - Inputs from either wall plates (EVO-SGP-xx) or contact input modules (EVO-INT_CI_xx) are exposed to HomeAssistant as device triggers.
-- If you have scenes in your NPU that contain a single channel, turning this light on and off will actually control the scene, rather than the output channel directly. This ensures better interoperability between the native eDIN+ system and HomeAssistant.
+- If you have scenes in your NPU that contain a single channel, turning this light on and off will actually control the scene, rather than the output channel directly. These scenes are termed "Proxy Scenes" within this integration; this ensures better interoperability between the native eDIN+ system and HomeAssistant.
+- Supports multiple NPUs connected to a single HomeAssistant instance (and equally up to 3 HomeAssistant instances are able to access the same NPU)
 
 ## Compatible modules/controls
 The following modules/controls have been verified to work correctly with this integration
 - Network Processor Module (DIN-NPU-00-01-PLUS) **REQUIRED**
 - 8 Channel Dimmer Module (DIN-02-08-PLUS)
 - Evo Contact Input Module (EVO-INT_CI_xx)
-- Input-Output module (DIN-INT-00-08-PLUS) :warning: *Beta support - unverified*
-- 10 Button Geneva Control Plate (GVA-SGP-55) :warning: *Partial support - still some issues*
+- Input-Output module (DIN-INT-00-08-PLUS) :warning: *Beta support - some functionality not supported*
+- Relay module (DIN-MSR-05-04-PLUS) :warning: *Beta support - unverified*
+- 10 Button Geneva Control Plate (GVA-SGP-55) :warning: *Beta support*
 
 ## eDIN+
 More information about the eDIN+ system can be found on Mode Lighting's website: http://www.modelighting.com/products/edin-plus/
