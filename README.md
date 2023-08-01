@@ -8,9 +8,9 @@ Please note eDIN+ firmware SW00.120.2.3.x.x is **NOT** currently supported.
 
 The state of this component is: Local Push
 
-This component currently communicates with the NPU over a combination of HTTP and TCP using port 26 (not currently configurable)
+This component communicates with the NPU over a combination of HTTP and TCP using port 26
 
-Inputs currently trigger device triggers that can be used for automation
+Inputs trigger device triggers that can be used for automation
 
 ## Installation via HACS
 
@@ -46,32 +46,35 @@ HomeAssistant will then automatically discover all devices connected to the NPU,
 
 - Autodiscover of all channels configured in NPU
 - Dimmer channels from eDIN 2A 8 channel dimmer module (DIN-02-08) are imported as 8 individual lights, with full dimmable control.
-- Inputs from either wall plates (EVO-SGP-xx) or contact input modules (EVO-INT_CI_xx) are exposed to HomeAssistant as device triggers.
+- Inputs from either wall plates (EVO-SGP-xx), I/O modules (DIN-INT-00-08-PLUS) or contact input modules (EVO-INT_CI_xx) are exposed to HomeAssistant as device triggers.
 - If you have scenes in your NPU that contain a single channel, turning this light on and off will actually control the scene, rather than the output channel directly. These scenes are termed "Proxy Scenes" within this integration; this ensures better interoperability between the native eDIN+ system and HomeAssistant.
 - Supports multiple NPUs connected to a single HomeAssistant instance (and equally up to 3 HomeAssistant instances are able to access the same NPU)
 
 ## Compatible modules/controls
-| Device name                      | Model No.            | Supported?           |
-|----------------------------------|----------------------|----------------------|
-| Network Processor Module         | DIN-NPU-00-01-PLUS   | :white_check_mark:   |
-| Power Supply Module              | DIN-PSU-24V-PLUS     | :white_check_mark:   |
-| 4 Channel Dimmer Module          | DIN-03-04-PLUS       | :x:                  |
-| 8 Channel Dimmer Module          | DIN-02-08-PLUS       | :white_check_mark:   |
-| 4 Channel Dimmer Module - TE     | DIN-02-04-TE-PLUS    | :x:                  |
-| DALI Broadcast Module            | DIN-DBM-32-08-PLUS   | :x:                  |
-| 4 Channel Relay Contact Module   | DIN-MSR-05-04-PLUS   | :white_check_mark:   |
-| Input-Output Module              | DIN-INT-00-08-PLUS   | :warning:^1          |
-| Universal Ballast Control Module | DIN-UBC-01-05-PLUS   | :x:                  |
-| 4 Port M-BUS Splitter Module     | DIN-MBUS-SPL-04-PLUS | :x:                  |
-| Mode Sensor                      | DIN-MSENS-RM-T       | :x:                  |
-| Touch Screen 7" Tablet           | DIN-TS-07            | :x:                  |
-| Oslo Rotary controls             | DIN-RD-00-xx         | :x:                  |
-| EVO LCD Wall plate               | EVO-LCD-xx           | :x:                  |
-| Wall Plates (2, 5 and 10 button) | EVO-SGP-xx           | :white_check_mark:^2 |
-| Contact Input Module             | EVO-INT-CI-xx        | :white_check_mark:   |
+| Device name                      | Model No.            | Supported?            |
+|----------------------------------|----------------------|-----------------------|
+| Network Processor Module         | DIN-NPU-00-01-PLUS   | :white_check_mark:    |
+| Power Supply Module              | DIN-PSU-24V-PLUS     | :white_check_mark:    |
+| 8 Channel Dimmer Module          | DIN-02-08-PLUS       | :white_check_mark:    |
+| 4 Channel Dimmer Module - TE     | DIN-02-04-TE-PLUS    | :x:                   |
+| 4 Channel Dimmer Module          | DIN-03-04-PLUS       | :x:                   |
+| DALI Broadcast Module            | DIN-DBM-32-08-PLUS   | :x:                   |
+| 4 Channel Relay Contact Module   | DIN-MSR-05-04-PLUS   | :warning:[^1]         |
+| Input-Output Module              | DIN-INT-00-08-PLUS   | :warning:[^2]         |
+| Universal Ballast Control Module | DIN-UBC-01-05-PLUS   | :warning:[^3]         |
+| 4 Port M-BUS Splitter Module     | DIN-MBUS-SPL-04-PLUS | :warning:[^3]         |
+| Mode Sensor                      | DIN-MSENS-RM-T       | :x:                   |
+| Touch Screen 7" Tablet           | DIN-TS-07            | :x:                   |
+| Oslo Rotary controls             | DIN-RD-00-xx         | :x:                   |
+| EVO LCD Wall plate               | EVO-LCD-xx           | :x:                   |
+| Wall Plates (2, 5 and 10 button) | EVO-SGP-xx           | :white_check_mark:[^4]|
+| Contact Input Module             | EVO-INT-CI-xx        | :white_check_mark:    |
 
-^1 0-10V output and contact inputs are supported. DMX outputs are not currently supported.
-^2 Due to limitations of the NPU, all wall plates are assumed to be 10 button. These wall plates include Coolbrium, iCON, Geneva and EVO-Ellipse styles.
+[^1]: Supports switching relays between Open and Close; no support for Pulse yet.
+[^2]: 0-10V output and contact inputs are supported. DMX outputs are not supported.
+[^3]: These modules should not require any extra code to work, but haven't been verified to ensure that they don't cause issues.
+[^4]: Due to limitations of the NPU, all wall plates are assumed to be 10 button. These wall plates include Coolbrium, iCON, Geneva and EVO-Ellipse styles.
+
 
 ## eDIN+
 More information about the eDIN+ system can be found on Mode Lighting's website: http://www.modelighting.com/products/edin-plus/
@@ -114,8 +117,8 @@ Input channels are named as "{area} {channel name} switch" (e.g. "Living Room do
 
 ### Discovery
 
-Discovery is completed by calling the `/info?what=names` endpoint on the NPU via HTTP. This returns a full list of all devices, areas and scenes on the NPU in CSV format.
+Discovery is completed by calling the `/info?what=names` endpoint on the NPU via HTTP. This returns a full list of all devices, areas and scenes on the NPU in CSV format. Unfortunately this info endpoint doesn't exist in SW00.120.2.3.x.x, meaning any systems on this firmware aren't able to complete discovery correctly. 
 
-At present, only lines starting `CHAN` and `INPSTATE` are read as ouput channels and input channels respectively. It is a known issue that `INPSTATE` doesn't read each channel from wall plates.
+At present, only lines starting `CHAN` and `INPSTATE` are read as ouput channels and input channels respectively.
 
-One-to-one channel-to-scene mapping is done by requesting all scenes via `?SCNNAMES;` and then `?SCNCHANNAMES,{scene};`. If a scene controls only a single channel, then instead of using `$ChanFade,...` to control the channel output, `$SCNRECALLX,...` is used instead.
+One-to-one channel-to-scene mapping for proxy scenes are done using regex on the `/info?what=levels` endpoint on the NPU via HTTP. If a scene controls only a single channel, then instead of using `$ChanFade,...` to control the channel output, `$SCNRECALLX,...` is used instead.
