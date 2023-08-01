@@ -12,13 +12,11 @@ This component currently communicates with the NPU over a combination of HTTP an
 
 Inputs currently trigger device triggers that can be used for automation
 
-## Installation
+## Installation via HACS
 
 ### Disclaimer
 
 > :warning: This component is still in development. It is highly likely that you will need to completely remove and reinstall this component in order to upgrade to the latest version, losing any entities defined in automations.
-
-### Via HACS (preferred)
 
 This component can be easily installed via the Home Assistant Community Store (HACS).
 
@@ -31,21 +29,6 @@ Following that, [add this repository to the list of custom repositories in HACS]
 Then follow the steps in ["Configuration"](#configuration) below.
 
 This method allows for installing updates through HACS.
-
-### Manual: adding the eDIN+ Component to Home Assistant (not recommended)
-The **edinplus.py** files need to be placed in the installation directory of Home Assistant.
-```
-<config_dir>/custom_components/edinplus/__init__.py
-<config_dir>/custom_components/edinplus/config_flow.py
-<config_dir>/custom_components/edinplus/const.py
-<config_dir>/custom_components/edinplus/edinplus.py
-<config_dir>/custom_components/edinplus/light.py
-<config_dir>/custom_components/edinplus/manifest.json
-<config_dir>/custom_components/edinplus/strings.json
-<config_dir>/custom_components/edinplus/translations/en.json
-``` 
-
-Then follow the steps in "Configuration" below.
 
 ### Configuration
 
@@ -68,13 +51,27 @@ HomeAssistant will then automatically discover all devices connected to the NPU,
 - Supports multiple NPUs connected to a single HomeAssistant instance (and equally up to 3 HomeAssistant instances are able to access the same NPU)
 
 ## Compatible modules/controls
-The following modules/controls have been verified to work correctly with this integration
-- Network Processor Module (DIN-NPU-00-01-PLUS) **REQUIRED**
-- 8 Channel Dimmer Module (DIN-02-08-PLUS)
-- Evo Contact Input Module (EVO-INT_CI_xx)
-- Input-Output module (DIN-INT-00-08-PLUS) :warning: *Beta support - some functionality not supported*
-- Relay module (DIN-MSR-05-04-PLUS) :warning: *Beta support - unverified*
-- 10 Button Geneva Control Plate (GVA-SGP-55) :warning: *Beta support*
+| Device name                      | Model No.            | Supported?           |
+|----------------------------------|----------------------|----------------------|
+| Network Processor Module         | DIN-NPU-00-01-PLUS   | :white_check_mark:   |
+| Power Supply Module              | DIN-PSU-24V-PLUS     | :white_check_mark:   |
+| 4 Channel Dimmer Module          | DIN-03-04-PLUS       | :x:                  |
+| 8 Channel Dimmer Module          | DIN-02-08-PLUS       | :white_check_mark:   |
+| 4 Channel Dimmer Module - TE     | DIN-02-04-TE-PLUS    | :x:                  |
+| DALI Broadcast Module            | DIN-DBM-32-08-PLUS   | :x:                  |
+| 4 Channel Relay Contact Module   | DIN-MSR-05-04-PLUS   | :white_check_mark:   |
+| Input-Output Module              | DIN-INT-00-08-PLUS   | :warning:^1          |
+| Universal Ballast Control Module | DIN-UBC-01-05-PLUS   | :x:                  |
+| 4 Port M-BUS Splitter Module     | DIN-MBUS-SPL-04-PLUS | :x:                  |
+| Mode Sensor                      | DIN-MSENS-RM-T       | :x:                  |
+| Touch Screen 7" Tablet           | DIN-TS-07            | :x:                  |
+| Oslo Rotary controls             | DIN-RD-00-xx         | :x:                  |
+| EVO LCD Wall plate               | EVO-LCD-xx           | :x:                  |
+| Wall Plates (2, 5 and 10 button) | EVO-SGP-xx           | :white_check_mark:^2 |
+| Contact Input Module             | EVO-INT-CI-xx        | :white_check_mark:   |
+
+^1 0-10V output and contact inputs are supported. DMX outputs are not currently supported.
+^2 Due to limitations of the NPU, all wall plates are assumed to be 10 button. These wall plates include Coolbrium, iCON, Geneva and EVO-Ellipse styles.
 
 ## eDIN+
 More information about the eDIN+ system can be found on Mode Lighting's website: http://www.modelighting.com/products/edin-plus/

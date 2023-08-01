@@ -13,7 +13,7 @@ from . import edinplus
 
 # List of platforms to support. There should be a matching .py file for each,
 # eg <light.py> and <sensor.py>
-PLATFORMS: list[str] = ["light"]
+PLATFORMS: list[str] = ["light","switch"]
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up NPU from config entry."""
@@ -36,7 +36,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hub.monitor(hass)
     LOGGER.debug("Completed monitor")
 
-    # This creates each HA object for each platform your device requires (e.g. light, sensor)
+    # This creates each HA object for each platform your device requires (e.g. light, switch)
     # It's done by calling the `async_setup_entry` function in each platform module.
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     LOGGER.debug("Completed platform setup")

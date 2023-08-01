@@ -89,6 +89,7 @@ class edinplus_NPU_instance:
         self._endpoint = f"http://{hostname}/gateway?1" # NB although the 1 doesn't exist in the eDIN+ API spec for gateway endpoint, it's the only way to stop requests from stripping the ? completely (which results in /gateway, a 404)
         # NB the endpoint should support alternative ports for http connection ideally (to be confirmed in config flow)
         self.lights = []
+        self.switches = []
         self.manufacturer = "Mode Lighting"
         self.model = "DIN-NPU-00-01-PLUS"
         self.serial = None
@@ -107,12 +108,15 @@ class edinplus_NPU_instance:
     
     async def discover(self,config_entry: ConfigEntry):
         # Discover all lighting channels on devices connected to NPU
-        self.lights = await self.async_edinplus_discover_channels(config_entry)
+        self.lights,self.switches = await self.async_edinplus_discover_channels(config_entry)
         # Search to see if a channel has a unique scene with just it in - if so, toggle that scene rather than the channel (as keeps NPU happier!)
         self.chan_to_scn_proxy,self.chan_to_scn_proxy_fadetime = await self.async_edinplus_map_chans_to_scns()
         # Get the status for each light
         for light in self.lights:
             await light.tcp_force_state_inform()
+        # Get the status for each switch
+        for switch in self.switches:
+            await switch.tcp_force_state_inform()
 
 
     async def async_tcp_connect(self):
@@ -122,7 +126,7 @@ class edinplus_NPU_instance:
             reader,writer = await asyncio.open_connection(self._hostname, self._tcpport)
             self.online = True
         except:
-            LOGGER.error(f"[{self._hostname}] Unable to establish TCP connection to eDIN+. Check hostname '{self._hostname}' and that port {self._tcpport} is open.")
+            LOGGER.error(f"[{self._hostname}] Unable to establish TCP connection to eDIN+ NPU. Check hostname '{self._hostname}' and that port {self._tcpport} is open.")
             self.online = False
         if self.online:
             # Assign reader and writer objects from asyncio to the NPU class
@@ -239,6 +243,13 @@ class edinplus_NPU_instance:
 
                         for callback in light._callbacks:
                             callback()
+                for switch in self.switches:
+                    if switch.channel == int(response.split(',')[3]):
+                        LOGGER.info(f"[{self._hostname}] Found switch corresponding to channel {switch.channel} in HA. Writing state {(int(response.split(',')[4]) > 0)}")
+                        switch._is_on = (int(response.split(',')[4]) > 0)
+
+                        for callback in switch._callbacks:
+                            callback()
                         # light.update_callback()
                         
                         
@@ -310,6 +321,7 @@ class edinplus_NPU_instance:
 
         # Run initial discovery using HTTP to establish what exists on the eDIN+ system linked to the NPU (returned in CSV format)
         dimmer_channel_instances = []
+        relay_channel_instances = []
         NPU_raw = await async_retrieve_from_npu(f"http://{self._hostname}/info?what=names")
 
         # Determine NPU serial number
@@ -330,15 +342,6 @@ class edinplus_NPU_instance:
             # Parsing expected format of Area,AreaNum,AreaName
             areas[int(area.split(',')[1])] = area.split(',')[2]
 
-
-        # plates_csv = [idx for idx in NPU_data if idx.startswith("PLATE")]
-
-        # plate_areas = {}
-        # plate_names = {}
-        # for plate in plates_csv:
-        #     # Parsing expected format of !Plate,Address,DevCode,AreaNum,PlateName
-        #     plate_areas[int(plate.split(',')[1])] = plate.split(',')[3]
-        #     plate_names[int(plate.split(',')[1])] = plate.split(',')[4]
 
         # Lighting channels
         channels_csv = [idx for idx in NPU_data if idx.startswith("CHAN")]
@@ -362,6 +365,8 @@ class edinplus_NPU_instance:
             elif channel_entity['devcode'] == 14: # 4 channel dimmer module
                 LOGGER.warning(f"[{self._hostname}] Unsupported output entity of type {DEVCODE_TO_PRODNAME[channel_entity['devcode']]} found in area {channel_entity['area']} as {channel_entity['name']}, channel number {channel_entity['channel']}. Adding to HomeAssistant for now.")
                 dimmer_channel_instances.append(edinplus_dimmer_channel_instance(channel_entity['address'],channel_entity['channel'],f"{channel_entity['area']} {channel_entity['name']}",channel_entity['area'],channel_entity['model'],channel_entity['devcode'],self))
+            elif channel_entity['devcode'] == 16: # 4x5A Relay module
+                relay_channel_instances.append(edinplus_relay_channel_instance(channel_entity['address'],channel_entity['channel'],f"{channel_entity['area']} {channel_entity['name']}",channel_entity['area'],channel_entity['model'],channel_entity['devcode'],self))
             else:
                 LOGGER.warning(f"[{self._hostname}] Incompatible/Unknown output entity of type {DEVCODE_TO_PRODNAME[channel_entity['devcode']]} found in area {channel_entity['area']} as {channel_entity['name']}, channel number {channel_entity['channel']}. Not adding to HomeAssistant")
 
@@ -390,7 +395,7 @@ class edinplus_NPU_instance:
                 input_entity['full_name'] = f"{input_entity['area']} {input_entity['name']} switch"
             elif input_entity['devcode'] == 2: # Wall plate
                 # NB there is currently no way of telling how many buttons a wall plate has from this discovery method - this is a known issue that has been discussed with Mode Lighting
-                # Consequently we only store this once for "channel 1" - in reality the CSV file has channel 1 and 2, irrespective of how many buttons there are in reality
+                # Consequently we only store this once for "channel 1" - in reality the CSV file has channel 1 and 2, irrespective of how many buttons there actually are on the keypad
                 if input_entity['channel'] != 1:
                     continue
                 # The name also has to be matched to the PLATE name if it exists (else do unnamed wall plate address #)
@@ -403,7 +408,7 @@ class edinplus_NPU_instance:
                 input_entity['name'] = plate_name
                 input_entity['area'] = plate_area
                 # Keypads can't have names assigned via the eDIN+ interface
-                input_entity['full_name'] = f"{input_entity['area']} {input_entity['name']}" # This needs to be reviewed - a keypad should only appear once, rather than having each individual button listed as a device (although this adds complexity to device_trigger as possible events need to be extended as e.g. Release-off button1, release-off button2 etc)
+                input_entity['full_name'] = f"{input_entity['area']} {input_entity['name']} keypad" # This needs to be reviewed - a keypad should only appear once, rather than having each individual button listed as a device (although this adds complexity to device_trigger as possible events need to be extended as e.g. Release-off button1, release-off button2 etc)
             else:
                 # This should probably go through error handling rather than being blindly created, as it's an unknown device, and almost certainly won't work properly with the device trigger
                 input_entity['name'] = input.split(',')[5]
@@ -425,33 +430,11 @@ class edinplus_NPU_instance:
                 via_device=(DOMAIN,self._id),
             )
 
-        return dimmer_channel_instances
-    
-    
-    async def async_edinplus_map_chans_to_scns_legacy(self):
-        LOGGER.warning("!Using deprecated channel to scene proxy function")
-        # Search for any scenes that only have a single channel, and use as a proxy for channels where possible (as this works better with mode inputs)
-        # NB this needs to be improved such that only scenes with 100% brightness are used as a proxy (and only the first scene that matches - see issue open on GitHub)
-        chan_to_scn_proxy = {}
-        sceneList = await async_send_to_npu(self._endpoint,f"?SCNNAMES;")
-        sceneIDs = []
-        for sceneIdx in range(1,len(sceneList)):
-            currentScene = str(sceneList[sceneIdx]).split(",")
-            sceneIDs.append(currentScene[1]);
-        for sceneID in sceneIDs:
-            channelList = await async_send_to_npu(self._endpoint,f"?SCNCHANNAMES,{sceneID};")
-            # We're searching for cases where there are only two reponses - the OK and one channel;
-            if len(channelList) == 2:
-                currentChannel = str(channelList[1]).split(",")
-                addr = currentChannel[1]
-                chan_num = currentChannel[3]
-                chan_to_scn_proxy[f"{addr}-{chan_num}"] = int(sceneID)
-        LOGGER.debug("Have completed channel to scene proxy mapping:")
-        LOGGER.debug(chan_to_scn_proxy)
-        return chan_to_scn_proxy
+        return dimmer_channel_instances,relay_channel_instances
 
     async def async_edinplus_map_chans_to_scns(self):
-        # An updated version of the above function, but now using the info?what=levels endpoint instead, as this ensures that scenes with a level of 0% aren't mapped
+        # Search for any scenes that only have a single channel, and use as a proxy for channels where possible (as this works better with mode inputs)
+        # Now using the info?what=levels endpoint instead, as this ensures that scenes with a level of 0% aren't mapped
         chan_to_scn_proxy = {}
         chan_to_scn_proxy_fadetime = {}
         NPU_data = await async_retrieve_from_npu(f"http://{self._hostname}/info?what=levels")
@@ -478,10 +461,59 @@ class edinplus_NPU_instance:
         LOGGER.debug(chan_to_scn_proxy_fadetime)
         return chan_to_scn_proxy,chan_to_scn_proxy_fadetime
 
+class edinplus_relay_channel_instance:
+    def __init__(self, address:int, channel: int, name: str, area: str, model: str, devcode: int, npu: edinplus_NPU_instance) -> None:
+        self._address = address
+        self._channel = channel
+        self._id = f"edinplus-{npu.serial}-{self._address}-{self._channel}" # This ensures that automations etc aren't destroyed if the integration is removed and re-added, as channels will have the same unique id.
+        self.name = name
+        self.hub = npu
+        self._callbacks = set()
+        self._is_on = None
+        # self._connected = True # This is from the original example documentation - shouldn't be needed as connection status is handled by the NPU
+        self.model = model
+        self.area = area
+        self._devcode = devcode
+
+    @property
+    def channel(self):
+        return self._channel
+
+    @property
+    def switch_id(self) -> str:
+        """Return ID for switch."""
+        return self._id
+    
+    @property
+    def is_on(self):
+        return self._is_on
+
+    async def turn_on(self):
+        await tcp_send_message(self.hub.writer,f"$ChanFade,{self._address},{self._devcode},{self._channel},255,0;")
+        self._is_on = True
+
+    async def turn_off(self):
+        await tcp_send_message(self.hub.writer,f"$ChanFade,{self._address},{self._devcode},{self._channel},0,0;")
+        self._is_on = False
+
+    async def tcp_force_state_inform(self):
+        # A function to force a channel to report its current status to the TCP stream
+        LOGGER.debug(f"[{self.hub._hostname}] Forcing state inform for address-channel: {self._address},{self._channel}")
+        await tcp_send_message(self.hub.writer,f"?CHAN,{self._address},{self._devcode},{self._channel};")
+
+    # Register and remove callback functions are from example integration - not sure if still needed
+    def register_callback(self, callback: Callable[[], None]) -> None:
+        """Register callback, called when Switch changes state."""
+        self._callbacks.add(callback)
+
+    def remove_callback(self, callback: Callable[[], None]) -> None:
+        """Remove previously registered callback."""
+        self._callbacks.discard(callback)
+
+
 class edinplus_dimmer_channel_instance:
     # Create a class for a dimmer channel (i.e. variable brightness, but no colour/temperature control)
     def __init__(self, address:int, channel: int, name: str, area: str, model: str, devcode: int, npu: edinplus_NPU_instance) -> None:
-        LOGGER.debug("Initialising dimmer channel instance")
         self._dimmer_address = address
         self._channel = channel
         self._id = f"edinplus-{npu.serial}-{self._dimmer_address}-{self._channel}" # This ensures that automations etc aren't destroyed if the integration is removed and re-added, as dimmer channels will have the same unique id.
@@ -489,7 +521,7 @@ class edinplus_dimmer_channel_instance:
         self.hub = npu
         self._callbacks = set()
         self._is_on = None
-        self._connected = True # This is from the original example documentation - shouldn't be needed as connection status is handled by the NPU
+        # self._connected = True # This is from the original example documentation - shouldn't be needed as connection status is handled by the NPU
         self._brightness = None
         self.model = model
         self.area = area
