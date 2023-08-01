@@ -1,6 +1,6 @@
 # eDIN+ Component (Platform) for Home Assistant
 
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
+[![hacs_badge](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://github.com/hacs/integration)
 
 Tested on HA 2022.12.6 - 2023.7 and eDIN+ firmware SW00120.2.4.1.44. 
 
@@ -22,7 +22,7 @@ This component can be easily installed via the Home Assistant Community Store (H
 
 If you have not done so already, [follow the instructions to install HACS](https://hacs.xyz/docs/setup/download/) on your HomeAssistant instance.
 
-Following that, [add this repository to the list of custom repositories in HACS](https://hacs.xyz/docs/faq/custom_repositories), using the following url:
+Following that, install the eDIN+ integration using the button below:
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=sftgunner&repository=edinplus-integration&category=integration)
 
