@@ -90,6 +90,7 @@ class edinplus_NPU_instance:
         # NB the endpoint should support alternative ports for http connection ideally (to be confirmed in config flow)
         self.lights = []
         self.switches = []
+        self.buttons = []
         self.manufacturer = "Mode Lighting"
         self.model = "DIN-NPU-00-01-PLUS"
         self.serial = None
@@ -108,7 +109,7 @@ class edinplus_NPU_instance:
     
     async def discover(self,config_entry: ConfigEntry):
         # Discover all lighting channels on devices connected to NPU
-        self.lights,self.switches = await self.async_edinplus_discover_channels(config_entry)
+        self.lights,self.switches,self.buttons = await self.async_edinplus_discover_channels(config_entry)
         # Search to see if a channel has a unique scene with just it in - if so, toggle that scene rather than the channel (as keeps NPU happier!)
         self.chan_to_scn_proxy,self.chan_to_scn_proxy_fadetime = await self.async_edinplus_map_chans_to_scns()
         # Get the status for each light
@@ -236,16 +237,16 @@ class edinplus_NPU_instance:
                 LOGGER.debug(f"[{self._hostname}] Chanfade/level recieved on TCP channel: {response}")
                 # CHANFADE/LEVEL corresponds to a lighting channel
                 for light in self.lights:
-                    if light.channel == int(response.split(',')[3]):
-                        LOGGER.info(f"[{self._hostname}] Found light corresponding to channel {light.channel} in HA. Writing observed brightness {light._brightness}")
+                    if light.channel == int(response.split(',')[3]) and light._dimmer_address == int(response.split(',')[1]):
+                        LOGGER.info(f"[{self._hostname}] Found light corresponding to address {light._dimmer_address}, channel {light.channel} in HA. Writing observed brightness {light._brightness}")
                         light._is_on = (int(response.split(',')[4]) > 0)
                         light._brightness = int(response.split(',')[4])
 
                         for callback in light._callbacks:
                             callback()
                 for switch in self.switches:
-                    if switch.channel == int(response.split(',')[3]):
-                        LOGGER.info(f"[{self._hostname}] Found switch corresponding to channel {switch.channel} in HA. Writing state {(int(response.split(',')[4]) > 0)}")
+                    if switch.channel == int(response.split(',')[3]) and switch._address == int(response.split(',')[1]):
+                        LOGGER.info(f"[{self._hostname}] Found switch corresponding to address {switch._address}, channel {switch.channel} in HA. Writing state {(int(response.split(',')[4]) > 0)}")
                         switch._is_on = (int(response.split(',')[4]) > 0)
 
                         for callback in switch._callbacks:
@@ -322,6 +323,8 @@ class edinplus_NPU_instance:
         # Run initial discovery using HTTP to establish what exists on the eDIN+ system linked to the NPU (returned in CSV format)
         dimmer_channel_instances = []
         relay_channel_instances = []
+        relay_pulse_instances = []
+
         NPU_raw = await async_retrieve_from_npu(f"http://{self._hostname}/info?what=names")
 
         # Determine NPU serial number
@@ -367,6 +370,7 @@ class edinplus_NPU_instance:
                 dimmer_channel_instances.append(edinplus_dimmer_channel_instance(channel_entity['address'],channel_entity['channel'],f"{channel_entity['area']} {channel_entity['name']}",channel_entity['area'],channel_entity['model'],channel_entity['devcode'],self))
             elif channel_entity['devcode'] == 16: # 4x5A Relay module
                 relay_channel_instances.append(edinplus_relay_channel_instance(channel_entity['address'],channel_entity['channel'],f"{channel_entity['area']} {channel_entity['name']}",channel_entity['area'],channel_entity['model'],channel_entity['devcode'],self))
+                relay_pulse_instances.append(edinplus_relay_pulse_instance(channel_entity['address'],channel_entity['channel'],f"{channel_entity['area']} {channel_entity['name']} pulse toggle",channel_entity['area'],channel_entity['model'],channel_entity['devcode'],self))
             else:
                 LOGGER.warning(f"[{self._hostname}] Incompatible/Unknown output entity of type {DEVCODE_TO_PRODNAME[channel_entity['devcode']]} found in area {channel_entity['area']} as {channel_entity['name']}, channel number {channel_entity['channel']}. Not adding to HomeAssistant")
 
@@ -430,7 +434,7 @@ class edinplus_NPU_instance:
                 via_device=(DOMAIN,self._id),
             )
 
-        return dimmer_channel_instances,relay_channel_instances
+        return dimmer_channel_instances,relay_channel_instances,relay_pulse_instances
 
     async def async_edinplus_map_chans_to_scns(self):
         # Search for any scenes that only have a single channel, and use as a proxy for channels where possible (as this works better with mode inputs)
@@ -504,6 +508,40 @@ class edinplus_relay_channel_instance:
     # Register and remove callback functions are from example integration - not sure if still needed
     def register_callback(self, callback: Callable[[], None]) -> None:
         """Register callback, called when Switch changes state."""
+        self._callbacks.add(callback)
+
+    def remove_callback(self, callback: Callable[[], None]) -> None:
+        """Remove previously registered callback."""
+        self._callbacks.discard(callback)
+
+class edinplus_relay_pulse_instance:
+    def __init__(self, address:int, channel: int, name: str, area: str, model: str, devcode: int, npu: edinplus_NPU_instance) -> None:
+        self._address = address
+        self._channel = channel
+        self._id = f"edinplus-{npu.serial}-{self._address}-{self._channel}" # This ensures that automations etc aren't destroyed if the integration is removed and re-added, as channels will have the same unique id.
+        self.name = name
+        self.hub = npu
+        self._callbacks = set()
+        self.model = model
+        self.area = area
+        self._devcode = devcode
+        self.pulse_time = 1000 # miliseconds; this should be configurable
+
+    @property
+    def channel(self):
+        return self._channel
+
+    @property
+    def button_id(self) -> str:
+        """Return ID for button."""
+        return self._id
+
+    async def press(self):
+        await tcp_send_message(self.hub.writer,f"$ChanPulse,{self._address},{self._devcode},{self._channel},3,{self.pulse_time};")
+
+    # Register and remove callback functions are from example integration - not sure if still needed
+    def register_callback(self, callback: Callable[[], None]) -> None:
+        """Register callback, called when Button changes state."""
         self._callbacks.add(callback)
 
     def remove_callback(self, callback: Callable[[], None]) -> None:

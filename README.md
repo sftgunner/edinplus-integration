@@ -2,7 +2,7 @@
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://github.com/hacs/integration)
 
-Tested on HA 2022.12.6 - 2023.7 and eDIN+ firmware SW00120.2.4.1.44. 
+Tested on HA 2022.12.6 - 2023.8 and eDIN+ firmware SW00120.2.4.1.44. 
 
 Please note eDIN+ firmware SW00.120.2.3.x.x is **NOT** currently supported.
 
@@ -56,24 +56,25 @@ HomeAssistant will then automatically discover all devices connected to the NPU,
 | Network Processor Module         | DIN-NPU-00-01-PLUS   | :white_check_mark:    |
 | Power Supply Module              | DIN-PSU-24V-PLUS     | :white_check_mark:    |
 | 8 Channel Dimmer Module          | DIN-02-08-PLUS       | :white_check_mark:    |
-| 4 Channel Dimmer Module - TE     | DIN-02-04-TE-PLUS    | :x:                   |
-| 4 Channel Dimmer Module          | DIN-03-04-PLUS       | :x:                   |
+| 4 Channel Dimmer Module - TE     | DIN-02-04-TE-PLUS    | :x:[^1]               |
+| 4 Channel Dimmer Module          | DIN-03-04-PLUS       | :x:[^1]               |
 | DALI Broadcast Module            | DIN-DBM-32-08-PLUS   | :x:                   |
-| 4 Channel Relay Contact Module   | DIN-MSR-05-04-PLUS   | :warning:[^1]         |
-| Input-Output Module              | DIN-INT-00-08-PLUS   | :warning:[^2]         |
-| Universal Ballast Control Module | DIN-UBC-01-05-PLUS   | :warning:[^3]         |
-| 4 Port M-BUS Splitter Module     | DIN-MBUS-SPL-04-PLUS | :warning:[^3]         |
+| 4 Channel Relay Contact Module   | DIN-MSR-05-04-PLUS   | :warning:[^2]         |
+| Input-Output Module              | DIN-INT-00-08-PLUS   | :warning:[^3]         |
+| Universal Ballast Control Module | DIN-UBC-01-05-PLUS   | :warning:[^4]         |
+| 4 Port M-BUS Splitter Module     | DIN-MBUS-SPL-04-PLUS | :warning:[^4]         |
 | Mode Sensor                      | DIN-MSENS-RM-T       | :x:                   |
 | Touch Screen 7" Tablet           | DIN-TS-07            | :x:                   |
 | Oslo Rotary controls             | DIN-RD-00-xx         | :x:                   |
 | EVO LCD Wall plate               | EVO-LCD-xx           | :x:                   |
-| Wall Plates (2, 5 and 10 button) | EVO-SGP-xx           | :white_check_mark:[^4]|
+| Wall Plates (2, 5 and 10 button) | EVO-SGP-xx           | :white_check_mark:[^5]|
 | Contact Input Module             | EVO-INT-CI-xx        | :white_check_mark:    |
 
-[^1]: Supports switching relays between Open and Close; no support for Pulse yet.
-[^2]: 0-10V output and contact inputs are supported. DMX outputs are not supported.
-[^3]: These modules should not require any extra code to work, but haven't been verified to ensure that they don't cause issues.
-[^4]: Due to limitations of the NPU, all wall plates are assumed to be 10 button. These wall plates include Coolbrium, iCON, Geneva and EVO-Ellipse styles.
+[^1]: These aren't supported yet as I don't have the hardware to validate with, but should be simple to add as they're very similar to the DIN-02-08-PLUS. If you have this device and happy to help with a bit of debugging if needed, please open an issue and I'll trial adding these.
+[^2]: Supports switching relays between Open and Close as a switch; supports a toggle pulse using a button input.
+[^3]: 0-10V output and contact inputs are supported. DMX outputs are not supported. A sensor reading output states is not yet supported.
+[^4]: These modules should not require any extra code to work, but haven't been verified to ensure that they don't cause issues.
+[^5]: Due to limitations of the NPU, all wall plates are assumed to be 10 button. These wall plates include Coolbrium, iCON, Geneva and EVO-Ellipse styles.
 
 
 ## eDIN+
@@ -109,7 +110,9 @@ The method of reading from the TCP stream in "realtime" is somewhat of a hack, b
 
 ### Channel naming
 
->:warning: Channel naming convention is likely to change
+>:warning: Channel naming convention may change in the future
+
+Lighting and relay channels are assigned to their own device in HomeAssistant so that they can each be assigned to their own room. By contrast, keypads are kept as one HomeAssistant device for all 10 buttons, as these will always be in the same room.
 
 Output channels are named as "{area} {channel name}" (e.g. "Living Room downlighters"), and will automatically be assigned to a HomeAssistant area with the same name as the eDIN+ room.
 
