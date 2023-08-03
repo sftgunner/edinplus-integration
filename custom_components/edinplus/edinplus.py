@@ -91,6 +91,7 @@ class edinplus_NPU_instance:
         self.lights = []
         self.switches = []
         self.buttons = []
+        self.binary_sensors = []
         self.manufacturer = "Mode Lighting"
         self.model = "DIN-NPU-00-01-PLUS"
         self.serial = None
@@ -109,7 +110,7 @@ class edinplus_NPU_instance:
     
     async def discover(self,config_entry: ConfigEntry):
         # Discover all lighting channels on devices connected to NPU
-        self.lights,self.switches,self.buttons = await self.async_edinplus_discover_channels(config_entry)
+        self.lights,self.switches,self.buttons,self.binary_sensors = await self.async_edinplus_discover_channels(config_entry)
         # Search to see if a channel has a unique scene with just it in - if so, toggle that scene rather than the channel (as keeps NPU happier!)
         self.chan_to_scn_proxy,self.chan_to_scn_proxy_fadetime = await self.async_edinplus_map_chans_to_scns()
         # Get the status for each light
@@ -118,6 +119,9 @@ class edinplus_NPU_instance:
         # Get the status for each switch
         for switch in self.switches:
             await switch.tcp_force_state_inform()
+        # Get the status for each binary sensor
+        for binary_sensor in self.binary_sensors:
+            await binary_sensor.tcp_force_state_inform()
 
 
     async def async_tcp_connect(self):
@@ -203,6 +207,12 @@ class edinplus_NPU_instance:
                     config_entry_id=self._entry_id,
                     identifiers={(DOMAIN, uuid)},
                 )
+                for binary_sensor in self.binary_sensors:
+                    if binary_sensor.channel == channel and binary_sensor._address == address:
+                        LOGGER.info(f"[{self._hostname}] Found binary sensor corresponding to address {binary_sensor._address}, channel {binary_sensor.channel} in HA. Writing state {newstate_numeric > 0}")
+                        binary_sensor._is_on = (newstate_numeric > 0)
+                        for callback in binary_sensor._callbacks:
+                            callback()
 
                 LOGGER.debug(f"[{self._hostname}] Firing event for contact module device {uuid} with trigger type {newstate}")
                 self._hass.bus.fire(EDINPLUS_EVENT, {CONF_DEVICE_ID: device_entry.id, CONF_TYPE: newstate})
@@ -324,6 +334,7 @@ class edinplus_NPU_instance:
         dimmer_channel_instances = []
         relay_channel_instances = []
         relay_pulse_instances = []
+        binary_sensor_instances = []
 
         NPU_raw = await async_retrieve_from_npu(f"http://{self._hostname}/info?what=names")
 
@@ -391,12 +402,14 @@ class edinplus_NPU_instance:
                     input_entity['name'] = f"Unnamed {input_entity['model']} addr {input_entity['address']} chan {input_entity['channel']}"
                 input_entity['area'] = areas[int(input.split(',')[4])]
                 input_entity['full_name'] = f"{input_entity['area']} {input_entity['name']} switch"
+                binary_sensor_instances.append(edinplus_input_binary_sensor_instance(input_entity['address'],input_entity['channel'],f"{input_entity['area']} {input_entity['name']}",input_entity['area'],input_entity['model'],input_entity['devcode'],self))
             elif input_entity['devcode'] == 15: # I/O module
                 input_entity['name'] = input.split(',')[5]
                 if not input_entity['name']:
                     input_entity['name'] = f"Unnamed {input_entity['model']} addr {input_entity['address']} chan {input_entity['channel']}"
                 input_entity['area'] = areas[int(input.split(',')[4])]
                 input_entity['full_name'] = f"{input_entity['area']} {input_entity['name']} switch"
+                binary_sensor_instances.append(edinplus_input_binary_sensor_instance(input_entity['address'],input_entity['channel'],f"{input_entity['area']} {input_entity['name']}",input_entity['area'],input_entity['model'],input_entity['devcode'],self))
             elif input_entity['devcode'] == 2: # Wall plate
                 # NB there is currently no way of telling how many buttons a wall plate has from this discovery method - this is a known issue that has been discussed with Mode Lighting
                 # Consequently we only store this once for "channel 1" - in reality the CSV file has channel 1 and 2, irrespective of how many buttons there actually are on the keypad
@@ -434,7 +447,7 @@ class edinplus_NPU_instance:
                 via_device=(DOMAIN,self._id),
             )
 
-        return dimmer_channel_instances,relay_channel_instances,relay_pulse_instances
+        return dimmer_channel_instances,relay_channel_instances,relay_pulse_instances,binary_sensor_instances
 
     async def async_edinplus_map_chans_to_scns(self):
         # Search for any scenes that only have a single channel, and use as a proxy for channels where possible (as this works better with mode inputs)
@@ -548,6 +561,45 @@ class edinplus_relay_pulse_instance:
         """Remove previously registered callback."""
         self._callbacks.discard(callback)
 
+class edinplus_input_binary_sensor_instance:
+    def __init__(self, address:int, channel: int, name: str, area: str, model: str, devcode: int, npu: edinplus_NPU_instance) -> None:
+        self._address = address
+        self._channel = channel
+        self._id = f"edinplus-{npu.serial}-{self._address}-{self._channel}" # This ensures that automations etc aren't destroyed if the integration is removed and re-added, as channels will have the same unique id.
+        self.name = name
+        self.hub = npu
+        self._callbacks = set()
+        self._is_on = None
+        self.model = model
+        self.area = area
+        self._devcode = devcode
+
+    @property
+    def channel(self):
+        return self._channel
+
+    @property
+    def sensor_id(self) -> str:
+        """Return ID for binary_sensor."""
+        return self._id
+
+    @property
+    def is_on(self):
+        return self._is_on
+
+    async def tcp_force_state_inform(self):
+        # A function to force an input channel to report its current status to the TCP stream
+        LOGGER.debug(f"[{self.hub._hostname}] Forcing state inform for address-channel: {self._address},{self._channel}")
+        await tcp_send_message(self.hub.writer,f"?INP,{self._address},{self._devcode},{self._channel};")
+
+    # Register and remove callback functions are from example integration - not sure if still needed
+    def register_callback(self, callback: Callable[[], None]) -> None:
+        """Register callback, called when Button changes state."""
+        self._callbacks.add(callback)
+
+    def remove_callback(self, callback: Callable[[], None]) -> None:
+        """Remove previously registered callback."""
+        self._callbacks.discard(callback)
 
 class edinplus_dimmer_channel_instance:
     # Create a class for a dimmer channel (i.e. variable brightness, but no colour/temperature control)

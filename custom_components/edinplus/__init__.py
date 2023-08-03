@@ -13,7 +13,7 @@ from . import edinplus
 
 # List of platforms to support. There should be a matching .py file for each,
 # eg <light.py> and <sensor.py>
-PLATFORMS: list[str] = ["light","switch","button"]
+PLATFORMS: list[str] = ["light","switch","button","binary_sensor"]
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up NPU from config entry."""

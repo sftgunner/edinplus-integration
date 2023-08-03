@@ -59,22 +59,21 @@ HomeAssistant will then automatically discover all devices connected to the NPU,
 | 4 Channel Dimmer Module - TE     | DIN-02-04-TE-PLUS    | :x:[^1]               |
 | 4 Channel Dimmer Module          | DIN-03-04-PLUS       | :x:[^1]               |
 | DALI Broadcast Module            | DIN-DBM-32-08-PLUS   | :x:                   |
-| 4 Channel Relay Contact Module   | DIN-MSR-05-04-PLUS   | :warning:[^2]         |
-| Input-Output Module              | DIN-INT-00-08-PLUS   | :warning:[^3]         |
-| Universal Ballast Control Module | DIN-UBC-01-05-PLUS   | :warning:[^4]         |
-| 4 Port M-BUS Splitter Module     | DIN-MBUS-SPL-04-PLUS | :warning:[^4]         |
+| 4 Channel Relay Contact Module   | DIN-MSR-05-04-PLUS   | :white_check_mark:    |
+| Input-Output Module              | DIN-INT-00-08-PLUS   | :warning:[^2]         |
+| Universal Ballast Control Module | DIN-UBC-01-05-PLUS   | :warning:[^3]         |
+| 4 Port M-BUS Splitter Module     | DIN-MBUS-SPL-04-PLUS | :warning:[^3]         |
 | Mode Sensor                      | DIN-MSENS-RM-T       | :x:                   |
 | Touch Screen 7" Tablet           | DIN-TS-07            | :x:                   |
 | Oslo Rotary controls             | DIN-RD-00-xx         | :x:                   |
 | EVO LCD Wall plate               | EVO-LCD-xx           | :x:                   |
-| Wall Plates (2, 5 and 10 button) | EVO-SGP-xx           | :white_check_mark:[^5]|
+| Wall Plates (2, 5 and 10 button) | EVO-SGP-xx           | :white_check_mark:[^4]|
 | Contact Input Module             | EVO-INT-CI-xx        | :white_check_mark:    |
 
 [^1]: These aren't supported yet as I don't have the hardware to validate with, but should be simple to add as they're very similar to the DIN-02-08-PLUS. If you have this device and happy to help with a bit of debugging if needed, please open an issue and I'll trial adding these.
-[^2]: Supports switching relays between Open and Close as a switch; supports a toggle pulse using a button input.
-[^3]: 0-10V output and contact inputs are supported. DMX outputs are not supported. A sensor reading output states is not yet supported.
-[^4]: These modules should not require any extra code to work, but haven't been verified to ensure that they don't cause issues.
-[^5]: Due to limitations of the NPU, all wall plates are assumed to be 10 button. These wall plates include Coolbrium, iCON, Geneva and EVO-Ellipse styles.
+[^2]: 0-10V output and contact inputs are supported. DMX outputs are not supported. A sensor reading output states is not yet supported.
+[^3]: These modules should not require any extra code to work, but haven't been verified to ensure that they don't cause issues.
+[^4]: Due to limitations of the NPU, all wall plates are assumed to be 10 button. These wall plates include Coolbrium, iCON, Geneva and EVO-Ellipse styles.
 
 
 ## eDIN+
@@ -87,6 +86,36 @@ If you find any bugs, please feel free to submit an issue, pull request or just 
 If opening an issue, please could you also include any detail from the HomeAssistant logs (if there are any!): just search for "edinplus" on this page: https://{ip}:8123/config/logs and any error messages should appear (click on them for more detail).
 
 If a module doesn't work as expected, please check it appears in the list of [compatible modules/controls](https://github.com/sftgunner/edinplus-integration/README.md#compatible-modulescontrols) before submitting an issue. If your module does not appear in this list, it is not expected that it will work with this integration. As I am only able to develop for the hardware I have, it is unlikely that I'll be able to add support for any modules not listed above. Having said that, please feel free to implement it yourself and then submit a pull request!
+
+## Adding curtains/blinds as HomeAssistant cover entities
+
+HomeAssistant uses [cover entites](https://www.home-assistant.io/integrations/cover/) to represent curtains, blinds, garage doors etc. If you have integrated your curtains and/or blinds into eDIN+ using the 4 x 5A Relay Unit, it is easy to add your curtains into HomeAssistant as fully fledged cover entities. 
+
+Unfortunately, as there are so many different types of electronic blinds and curtains, it is impossible to create an exhaustive guide on how to configure them in eDIN+ and HomeAssistant. The information below serves as a guide for a basic curtain setup, and can be adapted to suit the needs of individual configurations as required.
+
+To do this, a template entity is used. Simply navigate to your configuration.yaml file ([instructions on how to edit can be found at this link](https://www.home-assistant.io/docs/configuration/#:~:text=Editing%20configuration.yaml,File%20Editor%20add%2Don%20instead.)), and then add the following snippet of code at the bottom of your file.
+
+Curtain and blind motors each work differently - the example below is for a BCM700D curtain motor, which needs just a short pulse to trigger opening and closing functionality. Blinds that need the relay to be closed for a longer period of time might be able to achieve this by using [scripts](https://www.home-assistant.io/integrations/script/) instead of the button.press service.
+
+```yaml
+cover:
+  - platform: template
+    covers:
+      test_curtains:
+        device_class: curtain
+        friendly_name: "Test Curtain entity"
+        open_cover:
+          service: button.press
+          target:
+            entity_id: button.relay1
+        close_cover:
+          service: button.press
+          target:
+            entity_id: button.relay2
+```
+In this example, you would switch out ```button.relay1``` and ```button.relay2``` for the relevant pulse toggle buttons. If you were using blinds or a garage door rather than curtains, you can change the ```device class``` accordingly, using any of the classes found [in the HomeAssistant docs](https://www.home-assistant.io/integrations/cover/#device-class).
+
+If you want to add multiple curtains, simply copy and paste from ```test_curtains``` onwards.
 
 ## Technical information
 

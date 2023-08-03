@@ -72,13 +72,13 @@ class EdinPlusRelayPulseButton(ButtonEntity):
     def device_info(self) -> DeviceInfo:
         """Return the device info"""
         return DeviceInfo(
-            identifiers={(DOMAIN,self._button.button_id)},
-                name=self.name,
-                sw_version="1.0.0",
-                model=self._button.model,
-                manufacturer=self._button.hub.manufacturer,
-                suggested_area=self._button.area,
-                via_device=(DOMAIN,self._button.hub._id),
+            identifiers={(DOMAIN,self._button.button_id)}, #
+                # # name=self.name, We let the main switch set the device nam
+                # sw_version="1.0.0",
+                # model=self._button.model,
+                # manufacturer=self._button.hub.manufacturer,
+                # suggested_area=self._button.area,
+                # via_device=(DOMAIN,self._button.hub._id),
         )
 
     # @property
