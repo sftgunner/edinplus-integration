@@ -168,7 +168,8 @@ class edinplus_NPU_instance:
                 # NB This cancellation isn't reliable at the moment)
                 self.continuousTCPMonitor.cancel()
                 # LOGGER.debug(f"[{self._hostname}] Status of monitor task is "+{str(self.continuousTCPMonitor.done())})
-                await tcp_send_message_plus(self.writer,self.reader,f"$OK;")
+                # await tcp_send_message_plus(self.writer,self.reader,f"$OK;")
+                await tcp_send_message(self.writer,"$OK;")
                 try:
                     output = await asyncio.wait_for(tcp_recieve_message(self.reader), timeout=5.0)
                     if output == "":
@@ -203,6 +204,8 @@ class edinplus_NPU_instance:
                 uuid = f"edinplus-{self.serial}-{address}-{channel}"
                 # Get the HA device ID that triggered the event 
                 device_registry = dr.async_get(self._hass)
+
+                LOGGER.debug(f"[{self._hostname}] 207 Creating or getting device in registry with no name and id {uuid}")
                 device_entry = device_registry.async_get_or_create(
                     config_entry_id=self._entry_id,
                     identifiers={(DOMAIN, uuid)},
@@ -235,6 +238,10 @@ class edinplus_NPU_instance:
                 uuid = f"edinplus-{self.serial}-{address}-1" # Channel is always 1 in the UUID for a keypad due to the way that the NPU presents keypads
                 # Get the HA device ID that triggered the event 
                 device_registry = dr.async_get(self._hass)
+
+                self._id
+
+                LOGGER.debug(f"[{self._hostname}] 243 Creating or getting device in registry with no name and id {uuid}")
                 device_entry = device_registry.async_get_or_create(
                     config_entry_id=self._entry_id,
                     identifiers={(DOMAIN, uuid)},
@@ -315,13 +322,14 @@ class edinplus_NPU_instance:
         # For production, ideally only keep tcp alive every half hour (as NPU will terminate TCP stream if no activity for 60 minutes)
         # However, for debugging/development, this has been set to every 10 seconds (especially useful for trying to test the ability of the integration to recover when the NPU goes offline and then later online.
         
-        async_track_time_interval(hass,self.async_keep_tcp_alive, datetime.timedelta(minutes=30)) # Production
+        async_track_time_interval(hass,self.async_keep_tcp_alive, datetime.timedelta(minutes=10)) # Production
         # async_track_time_interval(hass,self.async_keep_tcp_alive, datetime.timedelta(seconds=10)) # Development
 
 
     async def async_edinplus_discover_channels(self,config_entry: ConfigEntry,):
         device_registry = dr.async_get(self._hass)
         # Add the NPU into the device registry - not required, but it makes things neater, and means the NPU shows up as a device in HA (and also appropriately shows device heirarchy)
+        LOGGER.debug(f"[{self._hostname}] 325 Creating device in registry with name NPU ({self._name}) and id {self._id}")
         device_registry.async_get_or_create(
             config_entry_id = config_entry.entry_id,
             identifiers={(DOMAIN, self._id)},
@@ -435,6 +443,8 @@ class edinplus_NPU_instance:
                 continue
             
             LOGGER.debug(f"[{self._hostname}] Input entity found of model '{input_entity['model']}' called '{input_entity['name']}' with id {input_entity['id']}")
+
+            LOGGER.debug(f"[{self._hostname}] 439 Creating device in registry with name {input_entity['full_name']} and id {input_entity['id']}")
 
             device_registry.async_get_or_create(
                 config_entry_id = config_entry.entry_id,
