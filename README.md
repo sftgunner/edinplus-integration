@@ -140,9 +140,9 @@ If you want to add multiple curtains, simply copy and paste from ```test_curtain
 
 If you find any bugs, please feel free to submit an issue, pull request or just fork this repo and improve it yourself!
 
-If opening an issue, please could you also include any detail from the HomeAssistant logs (if there are any!): just search for "edinplus" on this page: (http://{ip}:8123/config/logs)[https://my.home-assistant.io/redirect/logs/] and any error messages should appear (click on them for more detail).
+If opening an issue, please could you also include any detail from the HomeAssistant logs (if there are any!): just search for "edinplus" on this page: [http://{ip}:8123/config/logs](https://my.home-assistant.io/redirect/logs/) and any error messages should appear (click on them for more detail).
 
-If a module doesn't work as expected, please check it appears in the list of [compatible modules/controls](https://github.com/sftgunner/edinplus-integration/README.md#compatible-modulescontrols) before submitting an issue. If your module does not appear in this list, it is not expected that it will work with this integration. As I am only able to develop for the hardware I have, it is unlikely that I'll be able to add support for any modules not listed above. Having said that, please feel free to implement it yourself and then submit a pull request!
+If a module doesn't work as expected, please check it appears in the list of [compatible modules/controls](https://github.com/sftgunner/edinplus-integration/blob/main/README.md#compatible-modulescontrols) before submitting an issue. If your module does not appear in this list, it is not expected that it will work with this integration. As I am only able to develop for the hardware I have, it is unlikely that I'll be able to add support for any modules not listed above. Having said that, please feel free to implement it yourself and then submit a pull request!
 
 ## Technical information
 
