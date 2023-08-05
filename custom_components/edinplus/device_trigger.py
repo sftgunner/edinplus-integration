@@ -30,7 +30,17 @@ from homeassistant.helpers.typing import ConfigType
 from .const import DOMAIN, EDINPLUS_EVENT # This line can probably be removed (superceded by line 11)
 
 # Define the possible trigger types (to maintain HA syntax) as the list of different newstates
-TRIGGER_TYPES = NEWSTATE_TO_BUTTONEVENT.values()
+TRIGGER_TYPES = list(NEWSTATE_TO_BUTTONEVENT.values())
+
+# Keypads are a bit odd, as each button doesn't appear in the info?what=names discovery, so we instead have to trigger based on keypad assuming that the keypad has 10 buttons
+KEYPAD_BUTTONS = ["Button 1","Button 2","Button 3","Button 4","Button 5","Button 6","Button 7","Button 8","Button 9","Button 10"]
+
+KEYPAD_TRIGGER_TYPES = []
+for KEYPAD_BUTTON in KEYPAD_BUTTONS:
+    for TRIGGER_TYPE in TRIGGER_TYPES:
+        KEYPAD_TRIGGER_TYPES.append(f"{KEYPAD_BUTTON} {TRIGGER_TYPE}")
+
+ALL_TRIGGER_TYPES = TRIGGER_TYPES+KEYPAD_TRIGGER_TYPES
 
 # Limit the devices that can have input events to the button plates (2) and EVO contact input module (9). 
 # This should probably be extended to 15 (the eDIN I/O module) once able to verify functionality with hardware
@@ -43,7 +53,7 @@ TRIGGER_SCHEMA = DEVICE_TRIGGER_BASE_SCHEMA.extend(
     {
         vol.Required(CONF_DOMAIN): DOMAIN,
         vol.Required(CONF_DEVICE_ID): str,
-        vol.Required(CONF_TYPE): vol.In(TRIGGER_TYPES),
+        vol.Required(CONF_TYPE): vol.In(ALL_TRIGGER_TYPES),
     }
 )
 
@@ -60,15 +70,26 @@ async def async_get_triggers(
         LOGGER.debug(f"[INVALID FOR INPUT] Device entry model is {device_entry.model}")
         return []
     LOGGER.debug(f"[VALID] Device entry model is {device_entry.model}")
-    return [
-        {
-            CONF_PLATFORM: "device",
-            CONF_DOMAIN: DOMAIN,
-            CONF_DEVICE_ID: device_id,
-            CONF_TYPE: trigger_type,
-        }
-        for trigger_type in TRIGGER_TYPES
-    ]
+    if device_entry.model == DEVCODE_TO_PRODNAME[2]:
+        return [
+            {
+                CONF_PLATFORM: "device",
+                CONF_DOMAIN: DOMAIN,
+                CONF_DEVICE_ID: device_id,
+                CONF_TYPE: trigger_type,
+            }
+            for trigger_type in KEYPAD_TRIGGER_TYPES
+        ]
+    else:
+        return [
+            {
+                CONF_PLATFORM: "device",
+                CONF_DOMAIN: DOMAIN,
+                CONF_DEVICE_ID: device_id,
+                CONF_TYPE: trigger_type,
+            }
+            for trigger_type in TRIGGER_TYPES
+        ]
 
 
 # The async_attach_trigger has been mostly left as in the example code provided by HomeAssistant
