@@ -424,15 +424,9 @@ class edinplus_NPU_instance:
                 if input_entity['channel'] != 1:
                     continue
                 # The name also has to be matched to the PLATE name if it exists (else do unnamed wall plate address #)
-                plate_info = re.findall(rf"PLATE,{input_entity['address']},2,(\d),([\w ]+)?",NPU_raw)
-                try:
-                    plate_name = plate_info[0][1]
-                    plate_area = areas[int(plate_info[0][0])]
-                except: 
-                    LOGGER.warning(f"[{self._hostname}] Failed to find plate name; see issue 13 on GitHub for more details. plate_info[0] following...")
-                    LOGGER.warning(plate_info[0])
-                    plate_name = ""
-                    plate_area = "Unknown area"
+                plate_info = re.findall(rf"PLATE,{input_entity['address']},2,(\d+),([\w ]+)?",NPU_raw)
+                plate_name = plate_info[0][1]
+                plate_area = areas[int(plate_info[0][0])]
                 if not plate_name:
                     plate_name = f"Unnamed Wall Plate address {input_entity['address']}"
 
