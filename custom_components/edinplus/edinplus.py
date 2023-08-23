@@ -470,7 +470,7 @@ class edinplus_NPU_instance:
         # !ScnFade,SceneNum,Fadetime(ms)
         # !ScnChannel,SceneNum,Address,DevCode,ChanNum,Level
         # possible_proxies = re.findall(rf"SCENE,(\d+),\d+,[\w\s]+,\d+,\d+[\s]+SCNCHANLEVEL,\d,(\d+),\d+,(\d+),255\s",NPU_data)
-        possible_proxies = re.findall(rf"SCENE,(\d+),\d+,[\w\s]+SCNFADE,\d+,(\d+)[\s]+SCNCHANLEVEL,\d+,(\d+),\d+,(\d+),255\s",NPU_data)
+        possible_proxies = re.findall(rf"SCENE,(\d+),\d+,[\w\s]+SCNFADE,\d+,(\d+)[\s]+SCNCHANLEVEL,\d+,(\d+),\d+,(\d+),255\s\s",NPU_data)
         # Will return all possible proxies in sequence: Scene number, FadeTime, Address, ChanNum
 
         for proxy_combo in possible_proxies:
