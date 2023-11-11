@@ -70,6 +70,7 @@ class EdinPlusBinarySensor(BinarySensorEntity):
             manufacturer=self._binary_sensor.hub.manufacturer,
             suggested_area=self._binary_sensor.area,
             via_device=(DOMAIN,self._binary_sensor.hub._id),
+            configuration_url=f"http://{self._binary_sensor.hub._hostname}",
         )
 
     @property

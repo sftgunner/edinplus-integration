@@ -79,6 +79,7 @@ class EdinPlusSwitchChannel(SwitchEntity):
                 manufacturer=self._switch.hub.manufacturer,
                 suggested_area=self._switch.area,
                 via_device=(DOMAIN,self._switch.hub._id),
+                configuration_url=f"http://{self._switch.hub._hostname}",
         )
 
     @property
