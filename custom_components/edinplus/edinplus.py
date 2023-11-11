@@ -328,7 +328,7 @@ class edinplus_NPU_instance:
 
     async def async_edinplus_discover_channels(self,config_entry: ConfigEntry,):
         device_registry = dr.async_get(self._hass)
-        # Add the NPU into the device registry - not required, but it makes things neater, and means the NPU shows up as a device in HA (and also appropriately shows device heirarchy)
+        # Add the NPU into the device registry - not required, but it makes things neater, and means the NPU shows up as a device in HA (and also appropriately shows device hierarchy)
         LOGGER.debug(f"[{self._hostname}] 325 Creating device in registry with name NPU ({self._name}) and id {self._id}")
         device_registry.async_get_or_create(
             config_entry_id = config_entry.entry_id,
@@ -336,6 +336,7 @@ class edinplus_NPU_instance:
             manufacturer=self.manufacturer,
             name=f"NPU ({self._name})",
             model=self.model,
+            configuration_url=f"http://{self._hostname}",
         )
 
         # Run initial discovery using HTTP to establish what exists on the eDIN+ system linked to the NPU (returned in CSV format)
@@ -409,14 +410,14 @@ class edinplus_NPU_instance:
                 if not input_entity['name']:
                     input_entity['name'] = f"Unnamed {input_entity['model']} addr {input_entity['address']} chan {input_entity['channel']}"
                 input_entity['area'] = areas[int(input.split(',')[4])]
-                input_entity['full_name'] = f"{input_entity['area']} {input_entity['name']} switch"
+                input_entity['full_name'] = f"{input_entity['area']} {input_entity['name']}"
                 binary_sensor_instances.append(edinplus_input_binary_sensor_instance(input_entity['address'],input_entity['channel'],f"{input_entity['area']} {input_entity['name']}",input_entity['area'],input_entity['model'],input_entity['devcode'],self))
             elif input_entity['devcode'] == 15: # I/O module
                 input_entity['name'] = input.split(',')[5]
                 if not input_entity['name']:
                     input_entity['name'] = f"Unnamed {input_entity['model']} addr {input_entity['address']} chan {input_entity['channel']}"
                 input_entity['area'] = areas[int(input.split(',')[4])]
-                input_entity['full_name'] = f"{input_entity['area']} {input_entity['name']} switch"
+                input_entity['full_name'] = f"{input_entity['area']} {input_entity['name']}"
                 binary_sensor_instances.append(edinplus_input_binary_sensor_instance(input_entity['address'],input_entity['channel'],f"{input_entity['area']} {input_entity['name']}",input_entity['area'],input_entity['model'],input_entity['devcode'],self))
             elif input_entity['devcode'] == 2: # Wall plate
                 # NB there is currently no way of telling how many buttons a wall plate has from this discovery method - this is a known issue that has been discussed with Mode Lighting

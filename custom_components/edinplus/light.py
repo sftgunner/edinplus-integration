@@ -80,7 +80,8 @@ class EdinPlusLightChannel(LightEntity):
                 manufacturer=self._light.hub.manufacturer,
                 suggested_area=self._light.area,
                 via_device=(DOMAIN,self._light.hub._id),
-        )
+                configuration_url=f"http://{self._light.hub._hostname}",
+                )
 
     @property
     def brightness(self):
