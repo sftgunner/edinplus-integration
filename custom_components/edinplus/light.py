@@ -16,7 +16,7 @@ from pprint import pformat
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.components.light import (SUPPORT_BRIGHTNESS, ATTR_BRIGHTNESS,
-                                            PLATFORM_SCHEMA, LightEntity)
+                                            PLATFORM_SCHEMA, ColorMode, LightEntity)
 from homeassistant.const import CONF_NAME, CONF_IP_ADDRESS
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -96,8 +96,12 @@ class EdinPlusLightChannel(LightEntity):
             return int(self._light._brightness)
 
     @property
-    def supported_features(self):
-        return SUPPORT_BRIGHTNESS
+    def supported_color_modes(self):
+        return ColorMode.BRIGHTNESS
+
+    @property
+    def color_mode(self):
+        return ColorMode.BRIGHTNESS
 
     @property
     def is_on(self) -> bool | None:
