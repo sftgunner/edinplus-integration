@@ -182,7 +182,7 @@ class edinplus_NPU_instance:
                     self.comms_retry_attempts += 1
                     LOGGER.error(f"[{self._hostname}] No acknowledgement after 5 seconds. NPU might be offline? Attempt {self.comms_retry_attempts}/{self.comms_max_retry_attempts} before re-establishing connection.")
                 except RuntimeError: # Catch the runtime error "RuntimeError: readuntil() called while another coroutine is already waiting for incoming data" to avoid readlock getting stuck in True
-                    LOGGER.error(f"[{self._hostname}] Caught Runtime error")
+                    LOGGER.warning(f"[{self._hostname}] Caught Runtime error")
                 LOGGER.debug("Unlocking reads")
                 self.readlock = False
         else:
