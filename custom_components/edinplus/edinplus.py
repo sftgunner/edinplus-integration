@@ -193,6 +193,7 @@ class edinplus_NPU_instance:
     async def async_response_handler(self,response):
         # Handle any messages read from the TCP stream
         if response != "":
+            LOGGER.debug(f"[{self._hostname}] {response}")
             response_type = response.split(',')[0]
             # Parse response and determine what to do with it
             if response_type == "!INPSTATE":
@@ -215,12 +216,20 @@ class edinplus_NPU_instance:
                 for binary_sensor in self.binary_sensors:
                     if binary_sensor.channel == channel and binary_sensor._address == address:
                         LOGGER.info(f"[{self._hostname}] Found binary sensor corresponding to address {binary_sensor._address}, channel {binary_sensor.channel} in HA. Writing state {newstate_numeric > 0}")
+                        if (binary_sensor._is_on == None):
+                            binary_sensor_discovery_in_progress = True
+                        else:
+                            binary_sensor_discovery_in_progress = False
+                        
                         binary_sensor._is_on = (newstate_numeric > 0)
                         for callback in binary_sensor._callbacks:
                             callback()
 
-                LOGGER.debug(f"[{self._hostname}] Firing event for contact module device {uuid} with trigger type {newstate}")
-                self._hass.bus.fire(EDINPLUS_EVENT, {CONF_DEVICE_ID: device_entry.id, CONF_TYPE: newstate})
+                if (binary_sensor_discovery_in_progress):
+                    LOGGER.debug(f"[{self._hostname}] NOT Firing event for contact module device {uuid} with trigger type {newstate} as discovery active")
+                else:
+                    LOGGER.debug(f"[{self._hostname}] Firing event for contact module device {uuid} with trigger type {newstate}")
+                    self._hass.bus.fire(EDINPLUS_EVENT, {CONF_DEVICE_ID: device_entry.id, CONF_TYPE: newstate})
                 # except:
                 #     # This try except was a debugging step due to a small typo in an earlier version of the code - it should be safe to remove/move outside the if else clause
                 #     LOGGER.warning(f"[{self._hostname}] An error occurred when firing event for contact module device {address}-{channel} with trigger type {newstate_numeric}")
