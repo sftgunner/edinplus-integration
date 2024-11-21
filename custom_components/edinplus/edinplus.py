@@ -208,13 +208,15 @@ class edinplus_NPU_instance:
                 # Get the HA device ID that triggered the event 
                 device_registry = dr.async_get(self._hass)
 
-                LOGGER.debug(f"[{self._hostname}] 207 Creating or getting device in registry with no name and id {uuid}")
+                LOGGER.debug(f"[{self._hostname}] 211 Creating or getting device in registry with no name and id {uuid}")
                 device_entry = device_registry.async_get_or_create(
                     config_entry_id=self._entry_id,
                     identifiers={(DOMAIN, uuid)},
                 )
                 for binary_sensor in self.binary_sensors:
+                    found_binary_sensor_channel = False
                     if binary_sensor.channel == channel and binary_sensor._address == address:
+                        found_binary_sensor_channel = True
                         LOGGER.info(f"[{self._hostname}] Found binary sensor corresponding to address {binary_sensor._address}, channel {binary_sensor.channel} in HA. Writing state {newstate_numeric > 0}")
                         if (binary_sensor._is_on == None):
                             binary_sensor_discovery_in_progress = True
@@ -224,6 +226,9 @@ class edinplus_NPU_instance:
                         binary_sensor._is_on = (newstate_numeric > 0)
                         for callback in binary_sensor._callbacks:
                             callback()
+                if (found_binary_sensor_channel == False):
+                    LOGGER.warning(f"[{self._hostname}] Binary sensor without corresponding entity found; address {binary_sensor._address}, channel {binary_sensor.channel}")
+                    binary_sensor_discovery_in_progress = False
 
                 if (binary_sensor_discovery_in_progress):
                     LOGGER.debug(f"[{self._hostname}] NOT Firing event for contact module device {uuid} with trigger type {newstate} as discovery active")
