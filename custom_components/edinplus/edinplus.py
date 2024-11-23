@@ -213,8 +213,8 @@ class edinplus_NPU_instance:
                     config_entry_id=self._entry_id,
                     identifiers={(DOMAIN, uuid)},
                 )
+                found_binary_sensor_channel = False
                 for binary_sensor in self.binary_sensors:
-                    found_binary_sensor_channel = False
                     if binary_sensor.channel == channel and binary_sensor._address == address:
                         found_binary_sensor_channel = True
                         LOGGER.info(f"[{self._hostname}] Found binary sensor corresponding to address {binary_sensor._address}, channel {binary_sensor.channel} in HA. Writing state {newstate_numeric > 0}")
