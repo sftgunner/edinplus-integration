@@ -52,7 +52,6 @@ class EdinPlusLightChannel(LightEntity):
         self._attr_name = self._light.name
         self._attr_unique_id = f"{self._light.light_id}_light"
         self._state = None
-        self._brightness = None
 
     async def async_added_to_hass(self) -> None:
         """Run when this Entity has been added to HA."""
@@ -97,7 +96,7 @@ class EdinPlusLightChannel(LightEntity):
 
     @property
     def supported_color_modes(self):
-        return ColorMode.BRIGHTNESS
+        return {ColorMode.BRIGHTNESS}
 
     @property
     def color_mode(self):
