@@ -60,7 +60,7 @@ class edinplus_scene_instance:
         """Initialize the scene instance."""
         # Get the area name from the stored areas dictionary
         area_name = npu.areas.get(scene_area)
-        self.scene_num = f"edinplus-{npu.serial}-scene-{scene_num}"
+        self.scene_num = f"edinplus-{npu.serial_num}-scene-{scene_num}"
         self._scene_number = scene_num
         self.name = f"eDIN+ {area_name} {scene_name}"
         self.area = scene_area
