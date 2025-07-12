@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 import logging
 # Import constants
 from .const import DOMAIN
@@ -18,22 +19,36 @@ PLATFORMS: list[str] = ["light","switch","button","binary_sensor","scene"]
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up NPU from config entry."""
     # This stores an instance of the NPU class that communicates with other devices
-    hub = edinplus.edinplus_NPU_instance(hass, entry.data["host"], entry.entry_id)
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = hub
+    edinplus_npu = edinplus.edinplus_NPU_instance(hass, entry.data["host"], entry.entry_id)
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = edinplus_npu
     
     LOGGER.debug("Initialised NPU instance")
-
+    
     # Initialise the TCP connection to the hub
-    # In future this could be done after completing the discover step, so that only only one concurrent connection is made from HA to the NPU at a time
-    await hub.async_tcp_connect()
+    await edinplus_npu.async_tcp_connect()
     LOGGER.debug("Completed TCP connect")
     
+    # # Add the NPU into the device registry - not required, but it makes things neater, and means the NPU shows up as a device in HA (and also appropriately shows device hierarchy)
+    # device_registry = dr.async_get(edinplus_npu._hass)
+    # LOGGER.debug(f"[{edinplus_npu._hostname}] Creating device in registry with name NPU ({edinplus_npu._name}) and id {edinplus_npu._id}")
+    # device_registry.async_get_or_create(
+    #     config_entry_id = entry.entry_id,
+    #     identifiers={(DOMAIN, edinplus_npu._id)},
+    #     manufacturer=edinplus_npu.manufacturer,
+    #     name=f"NPU ({edinplus_npu._name})",
+    #     model=edinplus_npu.model,
+    #     configuration_url=f"http://{edinplus_npu._hostname}",
+    # )
+    
+    # # Get latest system information from the NPU
+    await edinplus_npu.async_edinplus_check_systeminfo(entry)
+    
     # Ensure that all the devices are up to date on initialisation (i.e. scan for all connected devices)
-    await hub.discover(entry)
+    #await edinplus_npu.discover(entry)
     LOGGER.debug("Completed discover")
     
     # Monitor the TCP connection for any changes
-    await hub.monitor(hass)
+    await edinplus_npu.monitor(hass)
     LOGGER.debug("Completed monitor")
 
     # This creates each HA object for each platform your device requires (e.g. light, switch)

@@ -65,19 +65,6 @@ async def tcp_send_message_plus(writer,reader,message):
     #     print("ERR! Looks like NPU is offline: took more than 10 seconds to get a response.")
     # self.readlock = False
 
-# Async method of interrogating NPU via HTTP. 
-# !! This should be deprecated in favour of tcp_send_message above
-async def async_send_to_npu(endpoint,data):
-    async with aiohttp.ClientSession() as session:
-        async with session.post(endpoint,data=data) as resp:
-            response = await resp.text()
-    return response.splitlines()
-
-# Old synchronous function to post data to the NPU via HTTP (should now be unused, for reference only)
-def send_to_npu(endpoint,data):
-    response = requests.post(endpoint, data = data)
-    return response.content.decode("utf-8").splitlines()
-
 class edinplus_NPU_instance:
     def __init__(self,hass: HomeAssistant,hostname:str,entry_id) -> None:
         LOGGER.debug("Initialising NPU")
@@ -96,7 +83,11 @@ class edinplus_NPU_instance:
         self.scenes = []
         self.manufacturer = "Mode Lighting"
         self.model = "DIN-NPU-00-01-PLUS"
-        self.serial = None
+        self.serial_num = None # Serial number of NPU interface, as an 8-digit hexadecimal value
+        self.edit_stamp = None # Text string representing when the last edit was saved
+        self.adjust_stamp = None # Text string representing when the last adjustment was saved
+        self.info_what_names = None # This is the raw data from the NPU when interrogating the /info?what=names endpoint
+        self.info_what_levels = None # This is the raw data from the NPU when interrogating the /info?what=levels endpoint
         self.reader = None
         self.writer = None
         self.continuousTCPMonitor = None # For the coroutine task that monitors the TCP stream
@@ -117,7 +108,7 @@ class edinplus_NPU_instance:
         # Discover all lighting channels on devices connected to NPU
         self.lights,self.switches,self.buttons,self.binary_sensors = await self.async_edinplus_discover_channels(config_entry)
         # Discover all scenes on the NPU
-        self.scenes = await self.async_edinplus_discover_scenes(config_entry)
+        self.scenes = await self.async_edinplus_discover_scenes()
         # Search to see if a channel has a unique scene with just it in - if so, toggle that scene rather than the channel (as keeps NPU happier!)
         self.chan_to_scn_proxy,self.chan_to_scn_proxy_fadetime = await self.async_edinplus_map_chans_to_scns()
         # Get the status for each light
@@ -129,6 +120,40 @@ class edinplus_NPU_instance:
         # Get the status for each binary sensor
         for binary_sensor in self.binary_sensors:
             await binary_sensor.tcp_force_state_inform()
+            
+    async def async_edinplus_check_systeminfo(self,config_entry: ConfigEntry):
+        # Download and store the NPU configuration endpoints
+        self.info_what_names = await async_retrieve_from_npu(f"http://{self._hostname}/info?what=names")
+        self.info_what_levels = await async_retrieve_from_npu(f"http://{self._hostname}/info?what=levels")
+        
+        # Check system information from the NPU
+        # This is used to get the serial number, edit and adjust timestamps
+        # try:
+        systeminfo = re.findall(r"!SYSTEMID,(\d+),(\d+-\d+),(\d+-\d+)", self.info_what_levels)
+        if systeminfo and len(systeminfo[0]) == 3:
+            serial_num, edit_stamp, adjust_stamp = systeminfo[0]
+            if self.edit_stamp != edit_stamp or self.adjust_stamp != adjust_stamp:
+                LOGGER.info(f"[{self._hostname}] NPU system information has changed since last discovery. Serial number, edit and adjust timestamps will be updated.")
+                self.serial_num = serial_num
+                self.edit_stamp = edit_stamp
+                self.adjust_stamp = adjust_stamp
+                LOGGER.debug(f"[{self._hostname}] Serial number of NPU assigned as {self.serial_num}")
+                LOGGER.debug(f"[{self._hostname}] Last edit timestamp of NPU assigned as {self.edit_stamp}")
+                LOGGER.debug(f"[{self._hostname}] Last adjust timestamp of NPU assigned as {self.adjust_stamp}")
+                
+                LOGGER.debug(f"[{self._hostname}] Running discovery of channels, areas and scenes on the NPU")
+                await self.discover(config_entry)
+            else:
+                LOGGER.debug(f"[{self._hostname}] NPU system information has not changed since last discovery. Serial number, edit and adjust timestamps will not be updated.")
+                LOGGER.debug(f"[{self._hostname}] Serial number of NPU is {self.serial_num}")
+                LOGGER.debug(f"[{self._hostname}] Last edit timestamp of NPU is {self.edit_stamp}")
+                LOGGER.debug(f"[{self._hostname}] Last adjust timestamp of NPU is {self.adjust_stamp}")
+        else:
+            LOGGER.error("Could not find serial number of the eDIN+ system. Please report this issue to the developer of the integration.")
+            LOGGER.error(self.info_what_levels)
+        # except Exception as e:
+        #     LOGGER.error(f"Exception occurred while parsing system info: {e}")
+        #     LOGGER.error(self.info_what_levels)
 
 
     async def async_tcp_connect(self):
@@ -211,7 +236,7 @@ class edinplus_NPU_instance:
                 channel = int(response.split(',')[3])
                 newstate_numeric = int(response.split(',')[4][:3])
                 newstate = NEWSTATE_TO_BUTTONEVENT[newstate_numeric]
-                uuid = f"edinplus-{self.serial}-{address}-{channel}"
+                uuid = f"edinplus-{self.serial_num}-{address}-{channel}"
                 # Get the HA device ID that triggered the event 
                 device_registry = dr.async_get(self._hass)
 
@@ -258,7 +283,7 @@ class edinplus_NPU_instance:
                 # NB need to exclude channel in place of whole keypad
                 newstate_numeric = int(response.split(',')[4][:3])
                 newstate = f"Button {channel} {NEWSTATE_TO_BUTTONEVENT[newstate_numeric]}"
-                uuid = f"edinplus-{self.serial}-{address}-1" # Channel is always 1 in the UUID for a keypad due to the way that the NPU presents keypads
+                uuid = f"edinplus-{self.serial_num}-{address}-1" # Channel is always 1 in the UUID for a keypad due to the way that the NPU presents keypads
                 # Get the HA device ID that triggered the event 
                 device_registry = dr.async_get(self._hass)
 
@@ -347,6 +372,10 @@ class edinplus_NPU_instance:
         
         async_track_time_interval(hass,self.async_keep_tcp_alive, datetime.timedelta(minutes=10)) # Production
         # async_track_time_interval(hass,self.async_keep_tcp_alive, datetime.timedelta(seconds=10)) # Development
+        
+        # Also check the system information every 10 minutes to see if the NPU has changed (i.e. new devices added, or removed)
+        # This is used to trigger a re-discovery of the NPU configuration
+        async_track_time_interval(hass,self.async_edinplus_check_systeminfo, datetime.timedelta(minutes=10)) # Production
 
 
     async def async_edinplus_discover_channels(self,config_entry: ConfigEntry,):
@@ -368,15 +397,7 @@ class edinplus_NPU_instance:
         relay_pulse_instances = []
         binary_sensor_instances = []
 
-        NPU_raw = await async_retrieve_from_npu(f"http://{self._hostname}/info?what=names")
-
-        # Determine NPU serial number
-        try:
-            serial_number = re.findall(r"!SYSTEMID,(\d{4})",NPU_raw)
-            self.serial = serial_number[0]
-            LOGGER.debug(f"[{self._hostname}] Serial number of NPU assigned as {self.serial}")
-        except:
-            LOGGER.error("Could not find serial number of the eDIN+ system. Please report this issue to the developer of the integration.")
+        NPU_raw = self.info_what_names
 
         NPU_data = NPU_raw.splitlines()
 
@@ -424,7 +445,7 @@ class edinplus_NPU_instance:
             input_entity = {}
             input_entity['address'] = int(input.split(',')[1])
             input_entity['channel'] = int(input.split(',')[3])
-            input_entity['id'] = f"edinplus-{self.serial}-{input_entity['address']}-{input_entity['channel']}"
+            input_entity['id'] = f"edinplus-{self.serial_num}-{input_entity['address']}-{input_entity['channel']}"
             # For area on keypad this has to be matched to the PLATE
             input_entity['devcode'] = int(input.split(',')[2])
             input_entity['model'] = DEVCODE_TO_PRODNAME[input_entity['devcode']]
@@ -485,8 +506,7 @@ class edinplus_NPU_instance:
 
     async def async_edinplus_discover_areas(self):
         # Discover all areas on the NPU
-        NPU_data = await async_retrieve_from_npu(f"http://{self._hostname}/info?what=levels")
-        areas_raw = re.findall(rf"AREA,(\d+),([\w ]+)\s",NPU_data)
+        areas_raw = re.findall(rf"AREA,(\d+),([\w ]+)\s",self.info_what_levels)
         
         # Convert to dictionary for easier lookup
         areas_dict = {int(area[0]): area[1] for area in areas_raw}
@@ -494,12 +514,12 @@ class edinplus_NPU_instance:
         LOGGER.debug(f"[{self._hostname}] Area discovery completed. Found {len(areas_dict)} areas.")
         return areas_dict
 
-    async def async_edinplus_discover_scenes(self,config_entry: ConfigEntry):
+    async def async_edinplus_discover_scenes(self):
         # Discover all scenes on the NPU
         # This should parse the NPU data to find scenes and create edinplus_scene_instance objects
         scene_instances = []
         
-        NPU_data = await async_retrieve_from_npu(f"http://{self._hostname}/info?what=levels")
+        NPU_data = self.info_what_levels
         
         scenes = re.findall(rf"SCENE,(\d+),(\d+),([\w\s\(\)&\[\]]+)\s",NPU_data)
         
@@ -520,12 +540,11 @@ class edinplus_NPU_instance:
         # Now using the info?what=levels endpoint instead, as this ensures that scenes with a level of 0% aren't mapped
         chan_to_scn_proxy = {}
         chan_to_scn_proxy_fadetime = {}
-        NPU_data = await async_retrieve_from_npu(f"http://{self._hostname}/info?what=levels")
+        NPU_data = self.info_what_levels
 
         # !Scene,SceneNum,AreaNum,SceneName
         # !ScnFade,SceneNum,Fadetime(ms)
         # !ScnChannel,SceneNum,Address,DevCode,ChanNum,Level
-        # possible_proxies = re.findall(rf"SCENE,(\d+),\d+,[\w\s]+,\d+,\d+[\s]+SCNCHANLEVEL,\d,(\d+),\d+,(\d+),255\s",NPU_data)
         possible_proxies = re.findall(rf"SCENE,(\d+),\d+,[\w\s]+SCNFADE,\d+,(\d+)[\s]+SCNCHANLEVEL,\d+,(\d+),\d+,(\d+),255\s\s",NPU_data)
         # Will return all possible proxies in sequence: Scene number, FadeTime, Address, ChanNum
 
@@ -538,7 +557,7 @@ class edinplus_NPU_instance:
             chan_to_scn_proxy[f"{addr}-{chan_num}"] = int(sceneID)
             chan_to_scn_proxy_fadetime[f"{addr}-{chan_num}"] = int(fadeTime)
 
-        LOGGER.debug("Have completed channel to scene proxy mapping (using v2):")
+        LOGGER.debug("Have completed channel to scene proxy mapping:")
         LOGGER.debug(chan_to_scn_proxy)
         LOGGER.debug("Have also found default fadetimes for scene proxy mapping:")
         LOGGER.debug(chan_to_scn_proxy_fadetime)
@@ -548,7 +567,7 @@ class edinplus_relay_channel_instance:
     def __init__(self, address:int, channel: int, name: str, area: str, model: str, devcode: int, npu: edinplus_NPU_instance) -> None:
         self._address = address
         self._channel = channel
-        self._id = f"edinplus-{npu.serial}-{self._address}-{self._channel}" # This ensures that automations etc aren't destroyed if the integration is removed and re-added, as channels will have the same unique id.
+        self._id = f"edinplus-{npu.serial_num}-{self._address}-{self._channel}" # This ensures that automations etc aren't destroyed if the integration is removed and re-added, as channels will have the same unique id.
         self.name = name
         self.hub = npu
         self._callbacks = set()
@@ -597,7 +616,7 @@ class edinplus_relay_pulse_instance:
     def __init__(self, address:int, channel: int, name: str, area: str, model: str, devcode: int, npu: edinplus_NPU_instance) -> None:
         self._address = address
         self._channel = channel
-        self._id = f"edinplus-{npu.serial}-{self._address}-{self._channel}" # This ensures that automations etc aren't destroyed if the integration is removed and re-added, as channels will have the same unique id.
+        self._id = f"edinplus-{npu.serial_num}-{self._address}-{self._channel}" # This ensures that automations etc aren't destroyed if the integration is removed and re-added, as channels will have the same unique id.
         self.name = name
         self.hub = npu
         self._callbacks = set()
@@ -631,7 +650,7 @@ class edinplus_input_binary_sensor_instance:
     def __init__(self, address:int, channel: int, name: str, area: str, model: str, devcode: int, npu: edinplus_NPU_instance) -> None:
         self._address = address
         self._channel = channel
-        self._id = f"edinplus-{npu.serial}-{self._address}-{self._channel}" # This ensures that automations etc aren't destroyed if the integration is removed and re-added, as channels will have the same unique id.
+        self._id = f"edinplus-{npu.serial_num}-{self._address}-{self._channel}" # This ensures that automations etc aren't destroyed if the integration is removed and re-added, as channels will have the same unique id.
         self.name = name
         self.hub = npu
         self._callbacks = set()
@@ -672,7 +691,7 @@ class edinplus_dimmer_channel_instance:
     def __init__(self, address:int, channel: int, name: str, area: str, model: str, devcode: int, npu: edinplus_NPU_instance) -> None:
         self._dimmer_address = address
         self._channel = channel
-        self._id = f"edinplus-{npu.serial}-{self._dimmer_address}-{self._channel}" # This ensures that automations etc aren't destroyed if the integration is removed and re-added, as dimmer channels will have the same unique id.
+        self._id = f"edinplus-{npu.serial_num}-{self._dimmer_address}-{self._channel}" # This ensures that automations etc aren't destroyed if the integration is removed and re-added, as dimmer channels will have the same unique id.
         self.name = name
         self.hub = npu
         self._callbacks = set()
@@ -739,15 +758,6 @@ class edinplus_dimmer_channel_instance:
         # LOGGER.debug(f"[{self.hub._hostname}] ?CHAN,{self._dimmer_address},{self._devcode},{self._channel};")
         LOGGER.debug(f"[{self.hub._hostname}] Forcing state inform for address-channel: {self._dimmer_address},{self._channel}")
         await tcp_send_message(self.hub.writer,f"?CHAN,{self._dimmer_address},{self._devcode},{self._channel};")
-    
-    async def get_brightness(self):
-        LOGGER.warning("Polling using HTTP endpoint")
-        # !! Usage of async_send_to_npu should be deprecated in favour of tcp_send_message
-        output = await async_send_to_npu(self.hub._endpoint,f"?CHAN,{self._dimmer_address},{self._devcode},{self._channel};")
-        # Relevant response is in third line starting CHANLEVEL
-        # Will be in second line if attempting to call a non existent channel
-        brightness = output[2].split(',')[4]
-        return brightness
 
 # Register and remove callback functions are from example integration - not sure if still needed
     def register_callback(self, callback: Callable[[], None]) -> None:
