@@ -41,7 +41,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # )
     
     # # Get latest system information from the NPU
-    await edinplus_npu.async_edinplus_check_systeminfo(entry)
+    await edinplus_npu.async_edinplus_check_systeminfo()
     
     # Ensure that all the devices are up to date on initialisation (i.e. scan for all connected devices)
     #await edinplus_npu.discover(entry)
