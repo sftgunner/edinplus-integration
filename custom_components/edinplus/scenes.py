@@ -67,7 +67,8 @@ class edinplus_scene_instance:
 
     async def activate(self):
         """Activate the scene."""
-        await self.hub.tcp_send_message(
+        from .edinplus import tcp_send_message
+        await tcp_send_message(
             self.hub.writer, 
             f"$SCNRECALL,{self._scene_number};"
         )
