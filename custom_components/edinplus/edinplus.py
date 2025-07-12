@@ -26,6 +26,7 @@ from homeassistant.const import (
 
 # Import constants
 from .const import *
+from .scenes import edinplus_scene_instance
 
 LOGGER = logging.getLogger(__name__)
 
@@ -92,6 +93,7 @@ class edinplus_NPU_instance:
         self.switches = []
         self.buttons = []
         self.binary_sensors = []
+        self.scenes = []
         self.manufacturer = "Mode Lighting"
         self.model = "DIN-NPU-00-01-PLUS"
         self.serial = None
@@ -111,6 +113,8 @@ class edinplus_NPU_instance:
     async def discover(self,config_entry: ConfigEntry):
         # Discover all lighting channels on devices connected to NPU
         self.lights,self.switches,self.buttons,self.binary_sensors = await self.async_edinplus_discover_channels(config_entry)
+        # Discover all scenes on the NPU
+        self.scenes = await self.async_edinplus_discover_scenes(config_entry)
         # Search to see if a channel has a unique scene with just it in - if so, toggle that scene rather than the channel (as keeps NPU happier!)
         self.chan_to_scn_proxy,self.chan_to_scn_proxy_fadetime = await self.async_edinplus_map_chans_to_scns()
         # Get the status for each light
@@ -475,6 +479,31 @@ class edinplus_NPU_instance:
             )
 
         return dimmer_channel_instances,relay_channel_instances,relay_pulse_instances,binary_sensor_instances
+
+    async def async_edinplus_discover_scenes(self,config_entry: ConfigEntry):
+        # Discover all scenes on the NPU
+        # This should parse the NPU data to find scenes and create edinplus_scene_instance objects
+        scene_instances = []
+        
+        # Placeholder for scene discovery logic
+        # You can implement the actual discovery here by parsing the NPU data
+        # and creating edinplus_scene_instance objects for each discovered scene
+        
+        NPU_data = await async_retrieve_from_npu(f"http://{self._hostname}/info?what=levels")
+        
+        scenes = re.findall(rf"SCENE,(\d+),(\d+),([\w\s]+)\s",NPU_data)
+        
+        for scene in scenes:
+            scene_num = int(scene[0])
+            area_num = int(scene[1])
+            scene_name = scene[2]
+
+            # Create a scene instance for each discovered scene
+            scene_instance = edinplus_scene_instance(scene_num, scene_name, area_num, self)
+            scene_instances.append(scene_instance)
+        
+        LOGGER.debug(f"[{self._hostname}] Scene discovery completed. Found {len(scene_instances)} scenes.")
+        return scene_instances
 
     async def async_edinplus_map_chans_to_scns(self):
         # Search for any scenes that only have a single channel, and use as a proxy for channels where possible (as this works better with mode inputs)
