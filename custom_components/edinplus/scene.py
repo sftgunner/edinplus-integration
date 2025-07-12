@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 import logging
-from typing import Any
+from typing import Any, Callable
 
 from homeassistant.components.scene import Scene
 from homeassistant.config_entries import ConfigEntry
@@ -26,13 +26,13 @@ async def async_setup_entry(
     # Add scene entities for each discovered scene
     scene_entities = []
     for scene in npu.scenes:
-        scene_entities.append(EdinplusScene(scene))
+        scene_entities.append(EdinPlusScene(scene))
     
     if scene_entities:
         async_add_entities(scene_entities)
 
 
-class EdinplusScene(Scene):
+class EdinPlusScene(Scene):
     """Representation of an eDIN+ scene."""
 
     def __init__(self, scene) -> None:
@@ -75,10 +75,10 @@ class edinplus_scene_instance:
             f"$SCNRECALL,{self._scene_number};"
         )
 
-    def register_callback(self, callback) -> None:
+    def register_callback(self, callback: Callable[[], None]) -> None:
         """Register callback, called when Scene changes state."""
         self._callbacks.add(callback)
 
-    def remove_callback(self, callback) -> None:
+    def remove_callback(self, callback: Callable[[], None]) -> None:
         """Remove previously registered callback."""
         self._callbacks.discard(callback) 
