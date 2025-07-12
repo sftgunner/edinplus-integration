@@ -67,7 +67,7 @@ async def tcp_send_message_plus(writer,reader,message):
 
 class edinplus_NPU_instance:
     def __init__(self,hass: HomeAssistant,hostname:str,entry_id) -> None:
-        LOGGER.debug("Initialising NPU")
+        LOGGER.debug(f"[{hostname}] Initialising NPU instance")
         self._hostname = hostname
         self._hass = hass
         self._name = hostname
@@ -100,7 +100,7 @@ class edinplus_NPU_instance:
         self.online = False
         self.comms_retry_attempts = 0 
         self.comms_max_retry_attempts = 5 # The number of retries before we try and re-establish the TCP connection
-        LOGGER.debug("Initialised NPU instance (in edinplus.py)")
+        LOGGER.debug(f"[{hostname}] NPU instance initialised")
     
     async def discover(self):
         # Discover areas first
@@ -133,24 +133,19 @@ class edinplus_NPU_instance:
         if systeminfo and len(systeminfo[0]) == 3:
             serial_num, edit_stamp, adjust_stamp = systeminfo[0]
             if self.edit_stamp != edit_stamp or self.adjust_stamp != adjust_stamp:
-                LOGGER.warning(f"[{self._hostname}] NPU system information has changed since last discovery. Serial number, edit and adjust timestamps will be updated.") # Downgrade this to an info message in future
+                LOGGER.info(f"[{self._hostname}] NPU configuration has changed - triggering rediscovery")
                 self.serial_num = serial_num
                 self.edit_stamp = edit_stamp
                 self.adjust_stamp = adjust_stamp
-                LOGGER.debug(f"[{self._hostname}] Serial number of NPU assigned as {self.serial_num}")
-                LOGGER.debug(f"[{self._hostname}] Last edit timestamp of NPU assigned as {self.edit_stamp}")
-                LOGGER.debug(f"[{self._hostname}] Last adjust timestamp of NPU assigned as {self.adjust_stamp}")
+                LOGGER.debug(f"[{self._hostname}] Serial number: {self.serial_num}, Edit timestamp: {self.edit_stamp}, Adjust timestamp: {self.adjust_stamp}")
                 
                 LOGGER.debug(f"[{self._hostname}] Running discovery of channels, areas and scenes on the NPU")
                 await self.discover()
             else:
-                LOGGER.debug(f"[{self._hostname}] NPU system information has not changed since last discovery. Serial number, edit and adjust timestamps will not be updated.")
-                LOGGER.debug(f"[{self._hostname}] Serial number of NPU is {self.serial_num}")
-                LOGGER.debug(f"[{self._hostname}] Last edit timestamp of NPU is {self.edit_stamp}")
-                LOGGER.debug(f"[{self._hostname}] Last adjust timestamp of NPU is {self.adjust_stamp}")
+                LOGGER.debug(f"[{self._hostname}] NPU configuration unchanged - no rediscovery needed")
         else:
-            LOGGER.error("Could not find serial number of the eDIN+ system. Please report this issue to the developer of the integration.")
-            LOGGER.error(self.info_what_levels)
+            LOGGER.error(f"[{self._hostname}] Could not find serial number of the eDIN+ system. Please report this issue to the developer of the integration.")
+            LOGGER.error(f"[{self._hostname}] Raw data: {self.info_what_levels}")
         # except Exception as e:
         #     LOGGER.error(f"Exception occurred while parsing system info: {e}")
         #     LOGGER.error(self.info_what_levels)
@@ -178,7 +173,7 @@ class edinplus_NPU_instance:
                 LOGGER.error(f"[{self._hostname}] eDIN+ integration not getting any TCP response from the NPU.")
                 LOGGER.error(f"[{self._hostname}] Try rebooting the NPU (Configuration -> Tools -> Reinitialise system -> Reboot system) and then reload the integration in HomeAssistant")
             elif output.rstrip() == "!GATRDY;":
-                LOGGER.info("TCP connection ready")
+                LOGGER.info(f"[{self._hostname}] TCP connection established successfully")
             else:
                 LOGGER.error(f"[{self._hostname}] TCP connection not ready; received message: {output}")
 
@@ -190,13 +185,13 @@ class edinplus_NPU_instance:
         # NB the communication logic seems to be a bit flaky, due to asyncio reader not timing out correctly (i.e. it's still waiting for additional bytes when in fact the connection has closed). This also has potential to overload the NPU if connection not properly terminated
         if self.online:
             if self.comms_retry_attempts >= self.comms_max_retry_attempts:
-                LOGGER.error("Max retries on TCP connection reached. Attempting to re-establish TCP connection")
+                LOGGER.warning(f"[{self._hostname}] Max retries on TCP connection reached. Attempting to re-establish TCP connection")
                 self.comms_retry_attempts = 0
                 await self.async_tcp_connect()
             else:
-                LOGGER.debug("Keeping TCP connection alive")
+                LOGGER.debug(f"[{self._hostname}] Sending TCP keep-alive")
                 self.readlock = True
-                LOGGER.debug("Locking reads and cancelling continuous task")
+                LOGGER.debug(f"[{self._hostname}] Locking reads and cancelling continuous task")
                 # NB This cancellation isn't reliable at the moment)
                 self.continuousTCPMonitor.cancel()
                 # LOGGER.debug(f"[{self._hostname}] Status of monitor task is "+{str(self.continuousTCPMonitor.done())})
@@ -209,23 +204,23 @@ class edinplus_NPU_instance:
                         LOGGER.error(f"[{self._hostname}] Failed to communicate with NPU: Empty response on port {self._tcpport}. Please check 'Gateway control' is enabled on port {self._tcpport} on the eDIN system.  Attempt {self.comms_retry_attempts}/{self.comms_max_retry_attempts} before re-establishing connection.")
                     else:
                         self.comms_retry_attempts = 0
-                        LOGGER.debug(f"[{self._hostname}] Acknowledge: {output}")
+                        LOGGER.debug(f"[{self._hostname}] Keep-alive acknowledged: {output}")
                 except asyncio.TimeoutError:
                     self.comms_retry_attempts += 1
                     LOGGER.error(f"[{self._hostname}] No acknowledgement after 5 seconds. NPU might be offline? Attempt {self.comms_retry_attempts}/{self.comms_max_retry_attempts} before re-establishing connection.")
                 except RuntimeError: # Catch the runtime error "RuntimeError: readuntil() called while another coroutine is already waiting for incoming data" to avoid readlock getting stuck in True
-                    LOGGER.warning(f"[{self._hostname}] Caught Runtime error")
-                LOGGER.debug("Unlocking reads")
+                    LOGGER.warning(f"[{self._hostname}] Caught Runtime error during keep-alive")
+                LOGGER.debug(f"[{self._hostname}] Unlocking reads")
                 self.readlock = False
         else:
-            LOGGER.error("eDIN+ TCP connection still offline. Attempting to re-establish TCP connection.")
+            LOGGER.error(f"[{self._hostname}] eDIN+ TCP connection still offline. Attempting to re-establish TCP connection.")
             await self.async_tcp_connect()
     
 
     async def async_response_handler(self,response):
         # Handle any messages read from the TCP stream
         if response != "":
-            LOGGER.debug(f"[{self._hostname}] {response}")
+            LOGGER.debug(f"[{self._hostname}] TCP RX: {response}")
             response_type = response.split(',')[0]
             # Parse response and determine what to do with it
             if response_type == "!INPSTATE":
@@ -249,7 +244,7 @@ class edinplus_NPU_instance:
                 for binary_sensor in self.binary_sensors:
                     if binary_sensor.channel == channel and binary_sensor._address == address:
                         found_binary_sensor_channel = True
-                        LOGGER.info(f"[{self._hostname}] Found binary sensor corresponding to address {binary_sensor._address}, channel {binary_sensor.channel} in HA. Writing state {newstate_numeric > 0}")
+                        LOGGER.debug(f"[{self._hostname}] Binary sensor {binary_sensor._address}-{binary_sensor.channel} state updated to {newstate_numeric > 0}")
                         if (binary_sensor._is_on == None):
                             binary_sensor_discovery_in_progress = True
                         else:
@@ -259,8 +254,7 @@ class edinplus_NPU_instance:
                         for callback in binary_sensor._callbacks:
                             callback()
                 if (found_binary_sensor_channel == False):
-                    LOGGER.warning(f"[{self._hostname}] Binary sensor without corresponding entity found; address {binary_sensor._address}, channel {binary_sensor.channel}")
-                    binary_sensor_discovery_in_progress = False
+                    LOGGER.warning(f"[{self._hostname}] Binary sensor without corresponding entity found; address {address}, channel {channel}")
 
                 if (binary_sensor_discovery_in_progress):
                     LOGGER.debug(f"[{self._hostname}] NOT Firing event for contact module device {uuid} with trigger type {newstate} as discovery active")
@@ -297,11 +291,11 @@ class edinplus_NPU_instance:
                 self._hass.bus.fire(EDINPLUS_EVENT, {CONF_DEVICE_ID: device_entry.id, CONF_TYPE: newstate})
 
             elif (response_type == '!CHANFADE')or(response_type == '!CHANLEVEL'):
-                LOGGER.debug(f"[{self._hostname}] Chanfade/level received on TCP channel: {response}")
+                LOGGER.debug(f"[{self._hostname}] Channel fade/level received: {response}")
                 # CHANFADE/LEVEL corresponds to a lighting channel
                 for light in self.lights:
                     if light.channel == int(response.split(',')[3]) and light._dimmer_address == int(response.split(',')[1]):
-                        LOGGER.info(f"[{self._hostname}] Found light corresponding to address {light._dimmer_address}, channel {light.channel} in HA. Writing observed brightness {int(response.split(',')[4])}")
+                        LOGGER.debug(f"[{self._hostname}] Light {light._dimmer_address}-{light.channel} brightness updated to {int(response.split(',')[4])}")
                         light._is_on = (int(response.split(',')[4]) > 0)
                         light._brightness = int(response.split(',')[4])
 
@@ -309,7 +303,7 @@ class edinplus_NPU_instance:
                             callback()
                 for switch in self.switches:
                     if switch.channel == int(response.split(',')[3]) and switch._address == int(response.split(',')[1]):
-                        LOGGER.info(f"[{self._hostname}] Found switch corresponding to address {switch._address}, channel {switch.channel} in HA. Writing state {(int(response.split(',')[4]) > 0)}")
+                        LOGGER.debug(f"[{self._hostname}] Switch {switch._address}-{switch.channel} state updated to {(int(response.split(',')[4]) > 0)}")
                         switch._is_on = (int(response.split(',')[4]) > 0)
 
                         for callback in switch._callbacks:
@@ -342,7 +336,7 @@ class edinplus_NPU_instance:
             elif(response_type == '!SCNSTATE'):
                 LOGGER.debug(f"[{self._hostname}] NPU confirmed scene {response.split(',')[1]} has been set to {round(int(response.split(',')[3])/2.55)}% of max scene brightness")
             else:
-                LOGGER.debug(f"[{self._hostname}] !UNKNOWN TCP RX: {response}")
+                LOGGER.debug(f"[{self._hostname}] Unknown TCP response: {response}")
 
     async def async_monitor_tcp(self,now=None):
         # This is the function that keeps track of any new messages on the TCP stream, triggered every 0.01s by the function monitor below
@@ -379,7 +373,7 @@ class edinplus_NPU_instance:
     async def async_edinplus_discover_channels(self):
         device_registry = dr.async_get(self._hass)
         # Add the NPU into the device registry - not required, but it makes things neater, and means the NPU shows up as a device in HA (and also appropriately shows device hierarchy)
-        LOGGER.debug(f"[{self._hostname}] Creating device in registry with name NPU ({self._name}) and id {self._id}")
+        LOGGER.debug(f"[{self._hostname}] Creating NPU device in registry: {self._name} ({self._id})")
         device_registry.async_get_or_create(
             config_entry_id = self._entry_id,
             identifiers={(DOMAIN, self._id)},
@@ -438,6 +432,7 @@ class edinplus_NPU_instance:
 
         # Contact modules
         inputs_csv = [idx for idx in NPU_data if idx.startswith("INPSTATE")]
+        input_entities = []
         for input in inputs_csv:
             # Parsing expected format of Channel,Address,DevCode,ChanNum,AreaNum,ChanName
             input_entity = {}
@@ -485,9 +480,16 @@ class edinplus_NPU_instance:
                 LOGGER.warning(f"[{self._hostname}] Unknown input entity of type {DEVCODE_TO_PRODNAME[input_entity['devcode']]} found in area {input_entity['area']} as {input_entity['name']} with id {input_entity['id']}. Not adding to HomeAssistant.")
                 continue
             
-            LOGGER.debug(f"[{self._hostname}] Input entity found of model '{input_entity['model']}' called '{input_entity['name']}' with id {input_entity['id']}")
+            input_entities.append(input_entity)
 
-            LOGGER.debug(f"[{self._hostname}] Creating device in registry with name {input_entity['full_name']} and id {input_entity['id']}")
+        for input_entity in input_entities:
+            if input_entity['devcode'] not in [2, 9, 15]:  # Only support button plates (2), contact input modules (9), and I/O modules (15)
+                LOGGER.warning(f"[{self._hostname}] Unknown input entity of type {DEVCODE_TO_PRODNAME[input_entity['devcode']]} found in area {input_entity['area']} as {input_entity['name']} with id {input_entity['id']}. Not adding to HomeAssistant.")
+                continue
+            
+            LOGGER.debug(f"[{self._hostname}] Input entity found: {input_entity['model']} '{input_entity['name']}' (id: {input_entity['id']})")
+
+            LOGGER.debug(f"[{self._hostname}] Creating device in registry: {input_entity['full_name']} ({input_entity['id']})")
 
             device_registry.async_get_or_create(
                 config_entry_id = self._entry_id,
@@ -500,6 +502,7 @@ class edinplus_NPU_instance:
                 via_device=(DOMAIN,self._id),
             )
 
+        LOGGER.info(f"[{self._hostname}] Channel discovery completed: {len(dimmer_channel_instances)} dimmers, {len(relay_channel_instances)} relays, {len(relay_pulse_instances)} pulse buttons, {len(binary_sensor_instances)} binary sensors")
         return dimmer_channel_instances,relay_channel_instances,relay_pulse_instances,binary_sensor_instances
 
     async def async_edinplus_discover_areas(self):
@@ -509,7 +512,7 @@ class edinplus_NPU_instance:
         # Convert to dictionary for easier lookup
         areas_dict = {int(area[0]): area[1] for area in areas_raw}
         
-        LOGGER.debug(f"[{self._hostname}] Area discovery completed. Found {len(areas_dict)} areas.")
+        LOGGER.info(f"[{self._hostname}] Area discovery completed: {len(areas_dict)} areas found")
         return areas_dict
 
     async def async_edinplus_discover_scenes(self):
@@ -530,7 +533,7 @@ class edinplus_NPU_instance:
             scene_instance = edinplus_scene_instance(scene_num, scene_name, area_num, self)
             scene_instances.append(scene_instance)
         
-        LOGGER.debug(f"[{self._hostname}] Scene discovery completed. Found {len(scene_instances)} scenes.")
+        LOGGER.info(f"[{self._hostname}] Scene discovery completed: {len(scene_instances)} scenes found")
         return scene_instances
 
     async def async_edinplus_map_chans_to_scns(self):
@@ -555,10 +558,8 @@ class edinplus_NPU_instance:
             chan_to_scn_proxy[f"{addr}-{chan_num}"] = int(sceneID)
             chan_to_scn_proxy_fadetime[f"{addr}-{chan_num}"] = int(fadeTime)
 
-        LOGGER.debug("Have completed channel to scene proxy mapping:")
-        LOGGER.debug(chan_to_scn_proxy)
-        LOGGER.debug("Have also found default fadetimes for scene proxy mapping:")
-        LOGGER.debug(chan_to_scn_proxy_fadetime)
+        LOGGER.info(f"[{self._hostname}] Channel-to-scene proxy mapping completed: {len(chan_to_scn_proxy)} proxies found")
+        LOGGER.debug(f"[{self._hostname}] Proxy mapping: {chan_to_scn_proxy}")
         return chan_to_scn_proxy,chan_to_scn_proxy_fadetime
 
 class edinplus_relay_channel_instance:
@@ -591,14 +592,16 @@ class edinplus_relay_channel_instance:
     async def turn_on(self):
         await tcp_send_message(self.hub.writer,f"$ChanFade,{self._address},{self._devcode},{self._channel},255,0;")
         self._is_on = True
+        LOGGER.debug(f"[{self.hub._hostname}] Relay {self._address}-{self._channel} turned on")
 
     async def turn_off(self):
         await tcp_send_message(self.hub.writer,f"$ChanFade,{self._address},{self._devcode},{self._channel},0,0;")
         self._is_on = False
+        LOGGER.debug(f"[{self.hub._hostname}] Relay {self._address}-{self._channel} turned off")
 
     async def tcp_force_state_inform(self):
         # A function to force a channel to report its current status to the TCP stream
-        LOGGER.debug(f"[{self.hub._hostname}] Forcing state inform for address-channel: {self._address},{self._channel}")
+        LOGGER.debug(f"[{self.hub._hostname}] Requesting state for relay {self._address}-{self._channel}")
         await tcp_send_message(self.hub.writer,f"?CHAN,{self._address},{self._devcode},{self._channel};")
 
     # Register and remove callback functions are from example integration - not sure if still needed
@@ -634,6 +637,7 @@ class edinplus_relay_pulse_instance:
 
     async def press(self):
         await tcp_send_message(self.hub.writer,f"$ChanPulse,{self._address},{self._devcode},{self._channel},3,{self.pulse_time};")
+        LOGGER.debug(f"[{self.hub._hostname}] Button {self._address}-{self._channel} pressed")
 
     # Register and remove callback functions are from example integration - not sure if still needed
     def register_callback(self, callback: Callable[[], None]) -> None:
@@ -672,7 +676,7 @@ class edinplus_input_binary_sensor_instance:
 
     async def tcp_force_state_inform(self):
         # A function to force an input channel to report its current status to the TCP stream
-        LOGGER.debug(f"[{self.hub._hostname}] Forcing state inform for address-channel: {self._address},{self._channel}")
+        LOGGER.debug(f"[{self.hub._hostname}] Requesting state for input {self._address}-{self._channel}")
         await tcp_send_message(self.hub.writer,f"?INP,{self._address},{self._devcode},{self._channel};")
 
     # Register and remove callback functions are from example integration - not sure if still needed
@@ -718,46 +722,48 @@ class edinplus_dimmer_channel_instance:
         return self._brightness
 
     async def set_brightness(self, intensity: int):
+        # Convert HomeAssistant brightness (0-255) to eDIN+ brightness (0-255)
+        # NB eDIN+ uses 0-255 for brightness, same as HomeAssistant
         chan_to_scn_id = f"{str(self._dimmer_address).zfill(3)}-{str(self._channel).zfill(3)}"
         if self.hub._use_chan_to_scn_proxy and chan_to_scn_id in self.hub.chan_to_scn_proxy:
             await tcp_send_message(self.hub.writer,f"$SCNRECALLX,{self.hub.chan_to_scn_proxy[chan_to_scn_id]},{str(intensity)},{self.hub.chan_to_scn_proxy_fadetime[chan_to_scn_id]};")
+            LOGGER.debug(f"[{self.hub._hostname}] Dimmer {self._dimmer_address}-{self._channel} brightness set to {intensity} via scene proxy {self.hub.chan_to_scn_proxy[chan_to_scn_id]}")
         else:
             await tcp_send_message(self.hub.writer,f"$ChanFade,{self._dimmer_address},{self._devcode},{self._channel},{str(intensity)},0;")
+            LOGGER.debug(f"[{self.hub._hostname}] Dimmer {self._dimmer_address}-{self._channel} brightness set to {intensity}")
+        self._is_on = (intensity > 0)
         self._brightness = intensity
 
     async def turn_on(self):
+        # Turn on the light at full brightness
         chan_to_scn_id = f"{str(self._dimmer_address).zfill(3)}-{str(self._channel).zfill(3)}"
         if self.hub._use_chan_to_scn_proxy and chan_to_scn_id in self.hub.chan_to_scn_proxy:
             await tcp_send_message(self.hub.writer,f"$SCNRECALL,{self.hub.chan_to_scn_proxy[chan_to_scn_id]};")
-            # Code below was an attempt to verify changes had been written correctly, but due to async nature, doesn't seem to work - further investigation required
-            expectedResponse = f"!OK,SCNRECALL,{self.hub.chan_to_scn_proxy[chan_to_scn_id]:05d};"
-            # time.sleep(0.02)
-            # LOGGER.debug(f"[{self.hub._hostname}] Expected: {expectedResponse}")
-            # if expectedResponse in self.hub.queuedresponses:
-            #     self.hub.queuedresponses.remove(expectedResponse) #Remove queued response
-            #     LOGGER.debug(f"[{self.hub._hostname}] Acknowledgement received")
-            # else:
-            #     LOGGER.warning(f"[{self.hub._hostname}] No acknowledgement received. Expected {expectedResponse}. Current queue:")
-            #     LOGGER.warning(self.hub.queuedresponses)
+            LOGGER.debug(f"[{self.hub._hostname}] Dimmer {self._dimmer_address}-{self._channel} turned on via scene proxy {self.hub.chan_to_scn_proxy[chan_to_scn_id]}")
         else:
             await tcp_send_message(self.hub.writer,f"$ChanFade,{self._dimmer_address},{self._devcode},{self._channel},255,0;")
+            LOGGER.debug(f"[{self.hub._hostname}] Dimmer {self._dimmer_address}-{self._channel} turned on")
         self._is_on = True
+        self._brightness = 255
 
     async def turn_off(self):
+        # Turn off the light
         chan_to_scn_id = f"{str(self._dimmer_address).zfill(3)}-{str(self._channel).zfill(3)}"
         if self.hub._use_chan_to_scn_proxy and chan_to_scn_id in self.hub.chan_to_scn_proxy:
             await tcp_send_message(self.hub.writer,f"$SCNOFF,{self.hub.chan_to_scn_proxy[chan_to_scn_id]};")
+            LOGGER.debug(f"[{self.hub._hostname}] Dimmer {self._dimmer_address}-{self._channel} turned off via scene proxy {self.hub.chan_to_scn_proxy[chan_to_scn_id]}")
         else:
             await tcp_send_message(self.hub.writer,f"$ChanFade,{self._dimmer_address},{self._devcode},{self._channel},0,0;")
+            LOGGER.debug(f"[{self.hub._hostname}] Dimmer {self._dimmer_address}-{self._channel} turned off")
         self._is_on = False
+        self._brightness = 0
 
     async def tcp_force_state_inform(self):
         # A function to force a channel to report its current status to the TCP stream
-        # LOGGER.debug(f"[{self.hub._hostname}] ?CHAN,{self._dimmer_address},{self._devcode},{self._channel};")
-        LOGGER.debug(f"[{self.hub._hostname}] Forcing state inform for address-channel: {self._dimmer_address},{self._channel}")
+        LOGGER.debug(f"[{self.hub._hostname}] Requesting state for dimmer {self._dimmer_address}-{self._channel}")
         await tcp_send_message(self.hub.writer,f"?CHAN,{self._dimmer_address},{self._devcode},{self._channel};")
 
-# Register and remove callback functions are from example integration - not sure if still needed
+    # Register and remove callback functions are from example integration - not sure if still needed
     def register_callback(self, callback: Callable[[], None]) -> None:
         """Register callback, called when Light changes state."""
         self._callbacks.add(callback)

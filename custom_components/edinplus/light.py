@@ -42,6 +42,7 @@ class EdinPlusLightChannel(LightEntity):
         self._attr_name = self._light.name
         self._attr_unique_id = f"{self._light.light_id}_light"
         self._state = None
+        LOGGER.debug(f"[{self._light.hub._hostname}] Initialising light: {self._light.name} ({self._light.light_id})")
 
     async def async_added_to_hass(self) -> None:
         """Run when this Entity has been added to HA."""
@@ -118,7 +119,7 @@ class EdinPlusLightChannel(LightEntity):
         This is the only method that should fetch new data for Home Assistant.
         """
         # This should no longer be used, as this relies on HTTP rather than the TCP stream
-        LOGGER.warning("async HTTP update performed - this action should be updated to use the TCP stream")
+        LOGGER.warning(f"[{self._light.hub._hostname}] async HTTP update performed - this action should be updated to use the TCP stream")
         self._brightness = await self._light.get_brightness()
         if int(self._brightness) > 0:
             self._state = True
