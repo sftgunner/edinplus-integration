@@ -40,13 +40,14 @@ class EdinPlusScene(Scene):
         self._scene = scene
         self._attr_name = scene.name
         self._attr_unique_id = scene.scene_num
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, scene.scene_num)},
-            name=scene.name,
-            manufacturer=scene.hub.manufacturer,
-            model="eDIN+ Scene",
-            via_device=(DOMAIN, scene.hub._id),
-        )
+        # TODO: Link scene to relevant device if proxy scene
+        # self._attr_device_info = DeviceInfo(
+        #     identifiers={(DOMAIN, scene.scene_num)},
+        #     name=scene.name,
+        #     manufacturer=scene.hub.manufacturer,
+        #     model="eDIN+ Scene",
+        #     via_device=(DOMAIN, scene.hub._id),
+        # )
 
     async def async_activate(self, **kwargs: Any) -> None:
         """Activate the scene."""
