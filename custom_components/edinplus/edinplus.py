@@ -26,7 +26,7 @@ from homeassistant.const import (
 
 # Import constants
 from .const import *
-from .scenes import edinplus_scene_instance
+from .scene import edinplus_scene_instance
 
 LOGGER = logging.getLogger(__name__)
 
@@ -492,6 +492,7 @@ class edinplus_NPU_instance:
         NPU_data = await async_retrieve_from_npu(f"http://{self._hostname}/info?what=levels")
         
         scenes = re.findall(rf"SCENE,(\d+),(\d+),([\w\s]+)\s",NPU_data)
+        areas = re.findall(rf"AREA,(\d+),([\w ]+)\s",NPU_data)
         
         for scene in scenes:
             scene_num = int(scene[0])
