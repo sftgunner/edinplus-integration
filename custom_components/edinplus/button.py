@@ -36,11 +36,11 @@ class EdinPlusRelayPulseButton(ButtonEntity):
 
     def __init__(self, button) -> None:
         """Initialise an eDIN+ Relay Button."""
-        LOGGER.info("Initialising Relay Pulse Button")
         self._button = button
         self._attr_name = self._button.name
         self._attr_unique_id = f"{self._button.button_id}_button"
         self._state = None
+        LOGGER.debug(f"[{self._button.hub._hostname}] Initialising button: {self._button.name} ({self._button.button_id})")
 
     async def async_added_to_hass(self) -> None:
         """Run when this Entity has been added to HA."""

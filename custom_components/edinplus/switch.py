@@ -36,11 +36,11 @@ class EdinPlusSwitchChannel(SwitchEntity):
 
     def __init__(self, switch) -> None:
         """Initialise an eDIN+ Switch Channel."""
-        LOGGER.info("Initialising Switch Channel")
         self._switch = switch
         self._attr_name = self._switch.name
         self._attr_unique_id = f"{self._switch.switch_id}_switch"
         self._state = None
+        LOGGER.debug(f"[{self._switch.hub._hostname}] Initialising switch: {self._switch.name} ({self._switch.switch_id})")
 
     async def async_added_to_hass(self) -> None:
         """Run when this Entity has been added to HA."""

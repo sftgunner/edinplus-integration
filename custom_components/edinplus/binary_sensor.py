@@ -36,11 +36,11 @@ class EdinPlusBinarySensor(BinarySensorEntity):
 
     def __init__(self, binary_sensor) -> None:
         """Initialise an eDIN+ Binary Sensor."""
-        LOGGER.info("Initialising binary sensor for input channel")
         self._binary_sensor = binary_sensor
         self._attr_name = self._binary_sensor.name
         self._attr_unique_id = f"{self._binary_sensor.sensor_id}_binary_sensor"
         self._state = None
+        LOGGER.debug(f"[{self._binary_sensor.hub._hostname}] Initialising binary sensor: {self._binary_sensor.name} ({self._binary_sensor.sensor_id})")
 
     async def async_added_to_hass(self) -> None:
         """Run when this Entity has been added to HA."""
