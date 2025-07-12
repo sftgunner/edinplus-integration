@@ -36,7 +36,7 @@ class EdinPlusScene(Scene):
     """Representation of an eDIN+ scene."""
 
     def __init__(self, scene) -> None:
-        """Initialize the scene."""
+        """Initialise the scene."""
         self._scene = scene
         self._attr_name = scene.name
         self._attr_unique_id = scene.scene_num
@@ -57,7 +57,7 @@ class edinplus_scene_instance:
     """Class representing an eDIN+ scene."""
     
     def __init__(self, scene_num: int, scene_name: str, scene_area: str, npu) -> None:
-        """Initialize the scene instance."""
+        """Initialise the scene instance."""
         # Get the area name from the stored areas dictionary
         area_name = npu.areas.get(scene_area)
         self.scene_num = f"edinplus-{npu.serial_num}-scene-{scene_num}"

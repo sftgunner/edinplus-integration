@@ -30,7 +30,7 @@ This method allows for installing updates through HACS.
 
 ### Configuration
 
-To setup the eDIN+ component, first ensure HomeAssistant has been rebooted after completing the HACS installation process above.
+To set up the eDIN+ component, first ensure HomeAssistant has been rebooted after completing the HACS installation process above.
 
 Then add the integration through the integrations page [https://{ip}:8123/config/integrations](https://my.home-assistant.io/redirect/config_flow_start/?domain=edinplus) as you normally would, or click the button below to add it automatically.
 
@@ -42,12 +42,12 @@ HomeAssistant will then automatically discover all devices connected to the NPU,
 
 ## Features
 
-- Autodiscover of all compatible channels configured in NPU
+- Auto-discovery of all compatible channels configured in NPU
 - Dimmer channels from eDIN 2A 8 channel dimmer module (DIN-02-08) are imported as 8 individual lights, with full dimmable control.
 - Output channels from Input-Output Module (DIN-INT-00-08-PLUS) are imported as individual light entities, with dimmable control.
 - Any normal switched channels (i.e. non-dimmable channels) from any module will be imported as dimmable light entities. This is due to the design of the eDIN+ API - the NPU will handle dimming logic, and will NOT let any dimming commands be sent by HomeAssistant to a channel labelled as normal switched in the eDIN+ interface.
 - Inputs from either wall plates (EVO-SGP-xx), I/O modules (DIN-INT-00-08-PLUS) or contact input modules (EVO-INT_CI_xx) are exposed to HomeAssistant as device triggers, which can be used in automations.
-- Relay contact channels from Relay Module (DIN-MSR-05-04-PLUS) are imported as individual switch entities. The state of these relays can be controlled from this switch entity, or can be temporary toggled for 1s (pulse) using a "Pulse toggle" button entity in HomeAssistant.
+- Relay contact channels from Relay Module (DIN-MSR-05-04-PLUS) are imported as individual switch entities. The state of these relays can be controlled from this switch entity, or can be temporarily toggled for 1s (pulse) using a "Pulse toggle" button entity in HomeAssistant.
 - Supports multiple NPUs connected to a single HomeAssistant instance (and equally up to 3 HomeAssistant instances are able to access the same NPU).
 - If you have scenes in your NPU that contain a single lighting output channel, turning this light on and off will actually control the scene, rather than the output channel directly. These scenes are termed "Proxy Scenes" within this integration; this ensures better interoperability between the native eDIN+ system and HomeAssistant.
 
@@ -72,7 +72,7 @@ HomeAssistant will then automatically discover all devices connected to the NPU,
 | Contact Input Module             | EVO-INT-CI-xx        | :white_check_mark:    |
 
 [^1]: These aren't officially supported yet as I don't have the hardware to validate with, but functionality should be pretty close to the DIN-02-08-PLUS. If you use this device, it will flag up as a warning in the logs - please open an issue to confirm either that it functions as intended or to report any bugs, and I'll update this page accordingly.
-[^2]: 0-10V output and contact inputs are supported. Ouput channels will report their state as being "On" or "Off" (i.e. open or closed) using a sensor. DMX outputs are not supported.
+[^2]: 0-10V output and contact inputs are supported. Output channels will report their state as being "On" or "Off" (i.e. open or closed) using a sensor. DMX outputs are not supported.
 [^3]: These modules should not require any extra code to work, but haven't been verified to ensure that they don't cause issues.
 [^4]: Due to limitations of the NPU, all wall plates are assumed to be 10 button. These wall plates include Coolbrium, iCON, Geneva and EVO-Ellipse styles.
 
@@ -106,7 +106,7 @@ Input channels are imported as devices into HomeAssistant, but most don't have a
 
 > :warning: _These instructions are up to date as of 2023.8. If using a newer version of HomeAssistant, you may experience some inconsistencies in your interface._
 
-HomeAssistant uses [cover entites](https://www.home-assistant.io/integrations/cover/) to represent curtains, blinds, garage doors etc. If you have integrated your curtains and/or blinds into eDIN+ using the 4 x 5A Relay Unit, it is possible to add your curtains into HomeAssistant as fully fledged cover entities. 
+HomeAssistant uses [cover entities](https://www.home-assistant.io/integrations/cover/) to represent curtains, blinds, garage doors etc. If you have integrated your curtains and/or blinds into eDIN+ using the 4 x 5A Relay Unit, it is possible to add your curtains into HomeAssistant as fully fledged cover entities. 
 
 Unfortunately, as there are so many different types of electronic blinds and curtains, it is impossible to create an exhaustive guide on how to configure them in eDIN+ and HomeAssistant. The information below serves as a guide for a basic curtain setup, and can be adapted to suit the needs of individual configurations as required by the end user.
 
@@ -156,13 +156,13 @@ The vast majority of API communication is done via the TCP/IP stream.
 
 HomeAssistant will open a stream on component initialisation using `asyncio`, and then stores the `reader` and `writer` for the connection in the NPU class. These can be called to read and write from the API respectively.
 
-On initialisation, the component will call `$EVENTS,1;` to ensure that the connection is registered for recieving notification of all events happening on the NPU for parsing.
+On initialisation, the component will call `$EVENTS,1;` to ensure that the connection is registered for receiving notification of all events happening on the NPU for parsing.
 
 The component will look out for the `!GATRDY;` response on initialisation, but will only put a warning message in the logs if it doesn't see it. In future, there will be better error handling for scenarios like this!
 
-Every half an hour, the component will send the `$OK;` command to keep the connection by alive, queued using the `async_track_time_interval` command. By default, the NPU will close any TCP connection that is inactive for more than an hour.
+Every half an hour, the component will send the `$OK;` command to keep the connection alive, queued using the `async_track_time_interval` command. By default, the NPU will close any TCP connection that is inactive for more than an hour.
 
-The method of reading from the TCP stream in "realtime" is somewhat of a hack, but so far has proved robust. The `async_track_time_interval` command is again used to queue a "read from tcp stream" command every 0.01 seconds. This uses the `reader` object stored in the NPU class to see if there are any new bytes sent on the stream. This process will continue to read until an EOF is reached, at which point it will return the contents for the rest of the code to handle. This means it will take 0.05 seconds to read 5 commands that are sent on the TCP stream. To maintain code efficiency, while reading from the stream, a `readlock` flag in the NPU class properties will be set to true. When this is true, the "read from tcp stream" that is queued for that particular 0.01 second will immediately exit. If someone has  a better solution for this, I'd be very appreciative!
+The method of reading from the TCP stream in "realtime" is somewhat of a hack, but so far has proved robust. The `async_track_time_interval` command is again used to queue a "read from tcp stream" command every 0.01 seconds. This uses the `reader` object stored in the NPU class to see if there are any new bytes sent on the stream. This process will continue to read until an EOF is reached, at which point it will return the contents for the rest of the code to handle. This means it will take 0.05 seconds to read 5 commands that are sent on the TCP stream. To maintain code efficiency, while reading from the stream, a `readlock` flag in the NPU class properties will be set to true. When this is true, the "read from tcp stream" that is queued for that particular 0.01 second will immediately exit. If someone has a better solution for this, I'd be very appreciative!
 
 ### Channel naming
 
@@ -178,6 +178,6 @@ Input channels are named as "{area} {channel name} switch" (e.g. "Living Room do
 
 Discovery is completed by calling the `/info?what=names` endpoint on the NPU via HTTP. This returns a full list of all devices, areas and scenes on the NPU in CSV format. Unfortunately this info endpoint doesn't exist in SW00.120.2.3.x.x, meaning any systems on this firmware aren't able to complete discovery correctly. 
 
-At present, only lines starting `CHAN` and `INPSTATE` are read as ouput channels and input channels respectively.
+At present, only lines starting `CHAN` and `INPSTATE` are read as output channels and input channels respectively.
 
 One-to-one channel-to-scene mapping for proxy scenes are done using regex on the `/info?what=levels` endpoint on the NPU via HTTP. If a scene controls only a single channel, then instead of using `$ChanFade,...` to control the channel output, `$SCNRECALLX,...` is used instead.

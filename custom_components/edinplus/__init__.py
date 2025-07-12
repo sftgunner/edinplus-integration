@@ -1,10 +1,10 @@
-"""The eDin+ (by Mode Lighting) HomeAssistant integration"""
+"""The eDIN+ (by Mode Lighting) HomeAssistant integration"""
 from __future__ import annotations
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import device_registry as dr
 import logging
+
 # Import constants
 from .const import DOMAIN
 
@@ -28,23 +28,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await edinplus_npu.async_tcp_connect()
     LOGGER.debug("Completed TCP connect")
     
-    # # Add the NPU into the device registry - not required, but it makes things neater, and means the NPU shows up as a device in HA (and also appropriately shows device hierarchy)
-    # device_registry = dr.async_get(edinplus_npu._hass)
-    # LOGGER.debug(f"[{edinplus_npu._hostname}] Creating device in registry with name NPU ({edinplus_npu._name}) and id {edinplus_npu._id}")
-    # device_registry.async_get_or_create(
-    #     config_entry_id = entry.entry_id,
-    #     identifiers={(DOMAIN, edinplus_npu._id)},
-    #     manufacturer=edinplus_npu.manufacturer,
-    #     name=f"NPU ({edinplus_npu._name})",
-    #     model=edinplus_npu.model,
-    #     configuration_url=f"http://{edinplus_npu._hostname}",
-    # )
-    
-    # # Get latest system information from the NPU
+    # Get latest system information from the NPU
     await edinplus_npu.async_edinplus_check_systeminfo()
     
     # Ensure that all the devices are up to date on initialisation (i.e. scan for all connected devices)
-    #await edinplus_npu.discover(entry)
     LOGGER.debug("Completed discover")
     
     # Monitor the TCP connection for any changes

@@ -187,7 +187,7 @@ class edinplus_NPU_instance:
         # NPU will terminate TCP connection if no activity for an hour (to verify)
         # In future, could be more useful to use this function to check that the NPU configuration hasn't changed (and if it has, to re-run discover to find the added/removed devices)
         
-        # NB the communication logic seems to be a bit flaky, due to asyncio reader not timing out correctly (i.e. it's still waiting for addtional bytes when in fact the connection has closed). This also has potential to overload the NPU if connection not properly terminated
+        # NB the communication logic seems to be a bit flaky, due to asyncio reader not timing out correctly (i.e. it's still waiting for additional bytes when in fact the connection has closed). This also has potential to overload the NPU if connection not properly terminated
         if self.online:
             if self.comms_retry_attempts >= self.comms_max_retry_attempts:
                 LOGGER.error("Max retries on TCP connection reached. Attempting to re-establish TCP connection")
@@ -240,7 +240,7 @@ class edinplus_NPU_instance:
                 # Get the HA device ID that triggered the event 
                 device_registry = dr.async_get(self._hass)
 
-                LOGGER.debug(f"[{self._hostname}] 211 Creating or getting device in registry with no name and id {uuid}")
+                LOGGER.debug(f"[{self._hostname}] Creating or getting device in registry with no name and id {uuid}")
                 device_entry = device_registry.async_get_or_create(
                     config_entry_id=self._entry_id,
                     identifiers={(DOMAIN, uuid)},
@@ -287,9 +287,7 @@ class edinplus_NPU_instance:
                 # Get the HA device ID that triggered the event 
                 device_registry = dr.async_get(self._hass)
 
-                self._id
-
-                LOGGER.debug(f"[{self._hostname}] 243 Creating or getting device in registry with no name and id {uuid}")
+                LOGGER.debug(f"[{self._hostname}] Creating or getting device in registry with no name and id {uuid}")
                 device_entry = device_registry.async_get_or_create(
                     config_entry_id=self._entry_id,
                     identifiers={(DOMAIN, uuid)},
@@ -303,7 +301,7 @@ class edinplus_NPU_instance:
                 # CHANFADE/LEVEL corresponds to a lighting channel
                 for light in self.lights:
                     if light.channel == int(response.split(',')[3]) and light._dimmer_address == int(response.split(',')[1]):
-                        LOGGER.info(f"[{self._hostname}] Found light corresponding to address {light._dimmer_address}, channel {light.channel} in HA. Writing observed brightness {light._brightness}")
+                        LOGGER.info(f"[{self._hostname}] Found light corresponding to address {light._dimmer_address}, channel {light.channel} in HA. Writing observed brightness {int(response.split(',')[4])}")
                         light._is_on = (int(response.split(',')[4]) > 0)
                         light._brightness = int(response.split(',')[4])
 
@@ -489,7 +487,7 @@ class edinplus_NPU_instance:
             
             LOGGER.debug(f"[{self._hostname}] Input entity found of model '{input_entity['model']}' called '{input_entity['name']}' with id {input_entity['id']}")
 
-            LOGGER.debug(f"[{self._hostname}] 439 Creating device in registry with name {input_entity['full_name']} and id {input_entity['id']}")
+            LOGGER.debug(f"[{self._hostname}] Creating device in registry with name {input_entity['full_name']} and id {input_entity['id']}")
 
             device_registry.async_get_or_create(
                 config_entry_id = self._entry_id,
