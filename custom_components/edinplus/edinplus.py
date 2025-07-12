@@ -37,7 +37,7 @@ async def tcp_send_message(writer,message):
     await writer.drain()
     
 # Read messages from the NPU using the TCP stream (the reader object should be stored in the NPU class)
-async def tcp_recieve_message(reader):
+async def tcp_receive_message(reader):
     # if not reader.at_eof():
     data = await reader.readline()
     return data.decode()
@@ -169,9 +169,9 @@ class edinplus_NPU_instance:
             # Assign reader and writer objects from asyncio to the NPU class
             self.reader = reader
             self.writer = writer
-            # Register to recieve all events
+            # Register to receive all events
             await tcp_send_message(self.writer,'$EVENTS,1;')
-            output = await tcp_recieve_message(self.reader)
+            output = await tcp_receive_message(self.reader)
             # Output should be !GATRDY; if all ok with the TCP connection
 
             if output.rstrip() == "":
@@ -203,7 +203,7 @@ class edinplus_NPU_instance:
                 # await tcp_send_message_plus(self.writer,self.reader,f"$OK;")
                 await tcp_send_message(self.writer,"$OK;")
                 try:
-                    output = await asyncio.wait_for(tcp_recieve_message(self.reader), timeout=5.0)
+                    output = await asyncio.wait_for(tcp_receive_message(self.reader), timeout=5.0)
                     if output == "":
                         self.comms_retry_attempts += 1
                         LOGGER.error(f"[{self._hostname}] Failed to communicate with NPU: Empty response on port {self._tcpport}. Please check 'Gateway control' is enabled on port {self._tcpport} on the eDIN system.  Attempt {self.comms_retry_attempts}/{self.comms_max_retry_attempts} before re-establishing connection.")
@@ -299,7 +299,7 @@ class edinplus_NPU_instance:
                 self._hass.bus.fire(EDINPLUS_EVENT, {CONF_DEVICE_ID: device_entry.id, CONF_TYPE: newstate})
 
             elif (response_type == '!CHANFADE')or(response_type == '!CHANLEVEL'):
-                LOGGER.debug(f"[{self._hostname}] Chanfade/level recieved on TCP channel: {response}")
+                LOGGER.debug(f"[{self._hostname}] Chanfade/level received on TCP channel: {response}")
                 # CHANFADE/LEVEL corresponds to a lighting channel
                 for light in self.lights:
                     if light.channel == int(response.split(',')[3]) and light._dimmer_address == int(response.split(',')[1]):
@@ -355,8 +355,8 @@ class edinplus_NPU_instance:
             else:
                 # Set readlock to ensure that we don't have multiple functions trying to read from the stream simultaneously
                 self.readlock = True
-                # In theory if you run tcp_recieve_message as a task, it can then be cancelled, but this doesn't seem to be reliable
-                self.continuousTCPMonitor = asyncio.create_task(tcp_recieve_message(self.reader))
+                # In theory if you run tcp_receive_message as a task, it can then be cancelled, but this doesn't seem to be reliable
+                self.continuousTCPMonitor = asyncio.create_task(tcp_receive_message(self.reader))
                 response = await self.continuousTCPMonitor
                 await self.async_response_handler(response)
                 # Unlock reads - if the continuousTCPMonitor has finished, then an EOF has been reached, so this function needs to be re-run
@@ -737,9 +737,9 @@ class edinplus_dimmer_channel_instance:
             # LOGGER.debug(f"[{self.hub._hostname}] Expected: {expectedResponse}")
             # if expectedResponse in self.hub.queuedresponses:
             #     self.hub.queuedresponses.remove(expectedResponse) #Remove queued response
-            #     LOGGER.debug(f"[{self.hub._hostname}] Acknowlegement recieved")
+            #     LOGGER.debug(f"[{self.hub._hostname}] Acknowledgement received")
             # else:
-            #     LOGGER.warning(f"[{self.hub._hostname}] No acknowlegement recieved. Expected {expectedResponse}. Current queue:")
+            #     LOGGER.warning(f"[{self.hub._hostname}] No acknowledgement received. Expected {expectedResponse}. Current queue:")
             #     LOGGER.warning(self.hub.queuedresponses)
         else:
             await tcp_send_message(self.hub.writer,f"$ChanFade,{self._dimmer_address},{self._devcode},{self._channel},255,0;")
