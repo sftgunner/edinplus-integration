@@ -102,11 +102,11 @@ class edinplus_NPU_instance:
         self.comms_max_retry_attempts = 5 # The number of retries before we try and re-establish the TCP connection
         LOGGER.debug("Initialised NPU instance (in edinplus.py)")
     
-    async def discover(self,config_entry: ConfigEntry):
+    async def discover(self):
         # Discover areas first
         self.areas = await self.async_edinplus_discover_areas()
         # Discover all lighting channels on devices connected to NPU
-        self.lights,self.switches,self.buttons,self.binary_sensors = await self.async_edinplus_discover_channels(config_entry)
+        self.lights,self.switches,self.buttons,self.binary_sensors = await self.async_edinplus_discover_channels()
         # Discover all scenes on the NPU
         self.scenes = await self.async_edinplus_discover_scenes()
         # Search to see if a channel has a unique scene with just it in - if so, toggle that scene rather than the channel (as keeps NPU happier!)
@@ -121,7 +121,7 @@ class edinplus_NPU_instance:
         for binary_sensor in self.binary_sensors:
             await binary_sensor.tcp_force_state_inform()
             
-    async def async_edinplus_check_systeminfo(self,config_entry: ConfigEntry):
+    async def async_edinplus_check_systeminfo(self,now=None):
         # Download and store the NPU configuration endpoints
         self.info_what_names = await async_retrieve_from_npu(f"http://{self._hostname}/info?what=names")
         self.info_what_levels = await async_retrieve_from_npu(f"http://{self._hostname}/info?what=levels")
@@ -133,7 +133,7 @@ class edinplus_NPU_instance:
         if systeminfo and len(systeminfo[0]) == 3:
             serial_num, edit_stamp, adjust_stamp = systeminfo[0]
             if self.edit_stamp != edit_stamp or self.adjust_stamp != adjust_stamp:
-                LOGGER.info(f"[{self._hostname}] NPU system information has changed since last discovery. Serial number, edit and adjust timestamps will be updated.")
+                LOGGER.warning(f"[{self._hostname}] NPU system information has changed since last discovery. Serial number, edit and adjust timestamps will be updated.") # Downgrade this to an info message in future
                 self.serial_num = serial_num
                 self.edit_stamp = edit_stamp
                 self.adjust_stamp = adjust_stamp
@@ -142,7 +142,7 @@ class edinplus_NPU_instance:
                 LOGGER.debug(f"[{self._hostname}] Last adjust timestamp of NPU assigned as {self.adjust_stamp}")
                 
                 LOGGER.debug(f"[{self._hostname}] Running discovery of channels, areas and scenes on the NPU")
-                await self.discover(config_entry)
+                await self.discover()
             else:
                 LOGGER.debug(f"[{self._hostname}] NPU system information has not changed since last discovery. Serial number, edit and adjust timestamps will not be updated.")
                 LOGGER.debug(f"[{self._hostname}] Serial number of NPU is {self.serial_num}")
@@ -375,15 +375,15 @@ class edinplus_NPU_instance:
         
         # Also check the system information every 10 minutes to see if the NPU has changed (i.e. new devices added, or removed)
         # This is used to trigger a re-discovery of the NPU configuration
-        async_track_time_interval(hass,self.async_edinplus_check_systeminfo, datetime.timedelta(minutes=10)) # Production
+        async_track_time_interval(hass,self.async_edinplus_check_systeminfo, datetime.timedelta(seconds=15)) # Production
 
 
-    async def async_edinplus_discover_channels(self,config_entry: ConfigEntry,):
+    async def async_edinplus_discover_channels(self):
         device_registry = dr.async_get(self._hass)
         # Add the NPU into the device registry - not required, but it makes things neater, and means the NPU shows up as a device in HA (and also appropriately shows device hierarchy)
-        LOGGER.debug(f"[{self._hostname}] 325 Creating device in registry with name NPU ({self._name}) and id {self._id}")
+        LOGGER.debug(f"[{self._hostname}] Creating device in registry with name NPU ({self._name}) and id {self._id}")
         device_registry.async_get_or_create(
-            config_entry_id = config_entry.entry_id,
+            config_entry_id = self._entry_id,
             identifiers={(DOMAIN, self._id)},
             manufacturer=self.manufacturer,
             name=f"NPU ({self._name})",
@@ -492,7 +492,7 @@ class edinplus_NPU_instance:
             LOGGER.debug(f"[{self._hostname}] 439 Creating device in registry with name {input_entity['full_name']} and id {input_entity['id']}")
 
             device_registry.async_get_or_create(
-                config_entry_id = config_entry.entry_id,
+                config_entry_id = self._entry_id,
                 identifiers={(DOMAIN, input_entity['id'])},
                 manufacturer=self.manufacturer,
                 # name=f"Light switch ({input_entity['name']})",
