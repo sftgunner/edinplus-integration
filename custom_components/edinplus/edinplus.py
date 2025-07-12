@@ -105,12 +105,15 @@ class edinplus_NPU_instance:
         self._use_chan_to_scn_proxy = True # This should be offered in config flow (although not sure why you would ever not want it)
         self.chan_to_scn_proxy = {}
         self.chan_to_scn_proxy_fadetime = {}
+        self.areas = {}
         self.online = False
         self.comms_retry_attempts = 0 
         self.comms_max_retry_attempts = 5 # The number of retries before we try and re-establish the TCP connection
         LOGGER.debug("Initialised NPU instance (in edinplus.py)")
     
     async def discover(self,config_entry: ConfigEntry):
+        # Discover areas first
+        self.areas = await self.async_edinplus_discover_areas()
         # Discover all lighting channels on devices connected to NPU
         self.lights,self.switches,self.buttons,self.binary_sensors = await self.async_edinplus_discover_channels(config_entry)
         # Discover all scenes on the NPU
@@ -480,19 +483,25 @@ class edinplus_NPU_instance:
 
         return dimmer_channel_instances,relay_channel_instances,relay_pulse_instances,binary_sensor_instances
 
+    async def async_edinplus_discover_areas(self):
+        # Discover all areas on the NPU
+        NPU_data = await async_retrieve_from_npu(f"http://{self._hostname}/info?what=levels")
+        areas_raw = re.findall(rf"AREA,(\d+),([\w ]+)\s",NPU_data)
+        
+        # Convert to dictionary for easier lookup
+        areas_dict = {int(area[0]): area[1] for area in areas_raw}
+        
+        LOGGER.debug(f"[{self._hostname}] Area discovery completed. Found {len(areas_dict)} areas.")
+        return areas_dict
+
     async def async_edinplus_discover_scenes(self,config_entry: ConfigEntry):
         # Discover all scenes on the NPU
         # This should parse the NPU data to find scenes and create edinplus_scene_instance objects
         scene_instances = []
         
-        # Placeholder for scene discovery logic
-        # You can implement the actual discovery here by parsing the NPU data
-        # and creating edinplus_scene_instance objects for each discovered scene
-        
         NPU_data = await async_retrieve_from_npu(f"http://{self._hostname}/info?what=levels")
         
-        scenes = re.findall(rf"SCENE,(\d+),(\d+),([\w\s]+)\s",NPU_data)
-        areas = re.findall(rf"AREA,(\d+),([\w ]+)\s",NPU_data)
+        scenes = re.findall(rf"SCENE,(\d+),(\d+),([\w\s\(\)&\[\]]+)\s",NPU_data)
         
         for scene in scenes:
             scene_num = int(scene[0])
