@@ -1,20 +1,15 @@
-"""Switch platform for the eDIN+ HomeAssistant integration."""
+"""Binary sensor platform for the eDIN+ HomeAssistant integration."""
 from __future__ import annotations
 
 from typing import Any
 
 import logging
-import requests
 
 from .edinplus import edinplus_input_binary_sensor_instance
 from .const import DOMAIN
-import voluptuous as vol
 
-from pprint import pformat
-
-# Import the device class from the component that you want to support
 from homeassistant.helpers.entity import DeviceInfo
-from homeassistant.components.binary_sensor import (PLATFORM_SCHEMA, BinarySensorEntity)
+from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -28,7 +23,7 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Add cover for passed config_entry in HA."""
+    """Add binary sensors for passed config_entry in HA."""
     # The hub is loaded from the associated hass.data entry that was created in the
     # __init__.async_setup_entry function
     npu = hass.data[DOMAIN][config_entry.entry_id]
@@ -39,12 +34,9 @@ async def async_setup_entry(
 class EdinPlusBinarySensor(BinarySensorEntity):
     """Representation of an eDIN+ Binary Sensor."""
 
-    # should_poll = False
-
     def __init__(self, binary_sensor) -> None:
-        """Initialise an eDIN+ Switch Channel."""
+        """Initialise an eDIN+ Binary Sensor."""
         LOGGER.info("Initialising binary sensor for input channel")
-        # LOGGER.info(pformat(light))
         self._binary_sensor = binary_sensor
         self._attr_name = self._binary_sensor.name
         self._attr_unique_id = f"{self._binary_sensor.sensor_id}_binary_sensor"
@@ -56,7 +48,7 @@ class EdinPlusBinarySensor(BinarySensorEntity):
 
     async def async_will_remove_from_hass(self) -> None:
         """Entity being removed from hass."""
-        # The opposite of async_added_to_hass. Remove any registered call backs here.
+        # The opposite of async_added_to_hass. Remove any registered callbacks here.
         self._binary_sensor.remove_callback(self.async_write_ha_state)
 
     @property

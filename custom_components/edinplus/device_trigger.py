@@ -27,7 +27,7 @@ from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.typing import ConfigType
 
-from .const import DOMAIN, EDINPLUS_EVENT # This line can probably be removed (superceded by line 11)
+from .const import DOMAIN, EDINPLUS_EVENT
 
 # Define the possible trigger types (to maintain HA syntax) as the list of different newstates
 TRIGGER_TYPES = list(NEWSTATE_TO_BUTTONEVENT.values())
@@ -63,8 +63,6 @@ async def async_get_triggers(
     """List device triggers for eDIN+ devices."""
     device_registry = dr.async_get(hass)
     device_entry = device_registry.async_get(device_id)
-    # if device_entry is None:
-    #     raise DeviceNotFound(f"Device ID {device_id} is not valid")
     if device_entry.model not in INPUT_MODELS:
         # Flag any inputs from unsupported devices in logs and then drop
         LOGGER.debug(f"[INVALID FOR INPUT] Device entry model is {device_entry.model}")
