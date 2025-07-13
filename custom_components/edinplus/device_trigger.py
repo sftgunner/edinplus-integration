@@ -44,7 +44,8 @@ ALL_TRIGGER_TYPES = TRIGGER_TYPES+KEYPAD_TRIGGER_TYPES
 
 # Limit the devices that can have input events to the button plates (2) and EVO contact input module (9). 
 # This should probably be extended to 15 (the eDIN I/O module) once able to verify functionality with hardware
-INPUT_MODELS = {DEVCODE_TO_PRODNAME[2],DEVCODE_TO_PRODNAME[9],DEVCODE_TO_PRODNAME[15]}
+KEYPAD_INPUT_MODELS = {DEVCODE_TO_PRODNAME[1], DEVCODE_TO_PRODNAME[2]}
+INPUT_MODELS = {DEVCODE_TO_PRODNAME[1],DEVCODE_TO_PRODNAME[2],DEVCODE_TO_PRODNAME[9],DEVCODE_TO_PRODNAME[15]}
 
 LOGGER = logging.getLogger(__name__)
 
@@ -70,7 +71,7 @@ async def async_get_triggers(
         LOGGER.debug(f"[INVALID FOR INPUT] Device entry model is {device_entry.model}")
         return []
     LOGGER.debug(f"[VALID] Device entry model is {device_entry.model}")
-    if device_entry.model == DEVCODE_TO_PRODNAME[2]:
+    if device_entry.model in KEYPAD_INPUT_MODELS:
         return [
             {
                 CONF_PLATFORM: "device",

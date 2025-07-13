@@ -421,21 +421,14 @@ class edinplus_NPU_instance:
             # For area on keypad this has to be matched to the PLATE
             input_entity['devcode'] = int(input.split(',')[2])
             input_entity['model'] = DEVCODE_TO_PRODNAME[input_entity['devcode']]
-            if input_entity['devcode'] == 9: # Contact input module
+            if input_entity['devcode'] in [9,15]: # Contact input module, I/O module
                 input_entity['name'] = input.split(',')[5]
                 if not input_entity['name']:
                     input_entity['name'] = f"Unnamed {input_entity['model']} addr {input_entity['address']} chan {input_entity['channel']}"
                 input_entity['area'] = areas[int(input.split(',')[4])]
                 input_entity['full_name'] = f"{input_entity['area']} {input_entity['name']}"
                 binary_sensor_instances.append(edinplus_input_binary_sensor_instance(input_entity['address'],input_entity['channel'],f"{input_entity['area']} {input_entity['name']}",input_entity['area'],input_entity['model'],input_entity['devcode'],self))
-            elif input_entity['devcode'] == 15: # I/O module
-                input_entity['name'] = input.split(',')[5]
-                if not input_entity['name']:
-                    input_entity['name'] = f"Unnamed {input_entity['model']} addr {input_entity['address']} chan {input_entity['channel']}"
-                input_entity['area'] = areas[int(input.split(',')[4])]
-                input_entity['full_name'] = f"{input_entity['area']} {input_entity['name']}"
-                binary_sensor_instances.append(edinplus_input_binary_sensor_instance(input_entity['address'],input_entity['channel'],f"{input_entity['area']} {input_entity['name']}",input_entity['area'],input_entity['model'],input_entity['devcode'],self))
-            elif input_entity['devcode'] == 2: # Wall plate
+            elif input_entity['devcode'] in [1,2]: # Wall plate
                 # NB there is currently no way of telling how many buttons a wall plate has from this discovery method - this is a known issue that has been discussed with Mode Lighting
                 # Consequently we only store this once for "channel 1" - in reality the CSV file has channel 1 and 2, irrespective of how many buttons there actually are on the keypad
                 if input_entity['channel'] != 1:
@@ -459,9 +452,9 @@ class edinplus_NPU_instance:
                 LOGGER.warning(f"[{self._hostname}] Unknown input entity of type {DEVCODE_TO_PRODNAME[input_entity['devcode']]} found in area {input_entity['area']} as {input_entity['name']} with id {input_entity['id']}. Not adding to HomeAssistant.")
                 continue
             
-            LOGGER.debug(f"[{self._hostname}] Input entity found of model '{input_entity['model']}' called '{input_entity['name']}' with id {input_entity['id']}")
+            LOGGER.debug(f"[{self._hostname}] Input entity found: {input_entity['model']} '{input_entity['name']}' (id: {input_entity['id']})")
 
-            LOGGER.debug(f"[{self._hostname}] 439 Creating device in registry with name {input_entity['full_name']} and id {input_entity['id']}")
+            LOGGER.debug(f"[{self._hostname}] Creating device in registry: {input_entity['full_name']} ({input_entity['id']})")
 
             device_registry.async_get_or_create(
                 config_entry_id = config_entry.entry_id,
