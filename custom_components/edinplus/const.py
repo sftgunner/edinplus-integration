@@ -4,6 +4,9 @@
 
 DOMAIN = "edinplus"
 
+# Default TCP port for eDIN+ NPU communication
+DEFAULT_TCP_PORT = 26
+
 EDINPLUS_EVENT = f"{DOMAIN}_event" # Used for button presses (i.e. non-feedback based input from NPU)
 
 DEVCODE_TO_PRODCODE = {
