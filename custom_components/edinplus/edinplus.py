@@ -483,7 +483,7 @@ class edinplus_NPU_instance:
             input_entities.append(input_entity)
 
         for input_entity in input_entities:
-            if input_entity['devcode'] not in [2, 9, 15]:  # Only support button plates (2), contact input modules (9), and I/O modules (15)
+            if input_entity['devcode'] not in [1, 2, 9, 15]:  # Only support LCD wall plate (1), button plates (2), contact input modules (9), and I/O modules (15)
                 LOGGER.warning(f"[{self._hostname}] Unknown input entity of type {DEVCODE_TO_PRODNAME[input_entity['devcode']]} found in area {input_entity['area']} as {input_entity['name']} with id {input_entity['id']}. Not adding to HomeAssistant.")
                 continue
             
