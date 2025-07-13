@@ -434,11 +434,14 @@ class edinplus_NPU_instance:
                 if input_entity['channel'] != 1:
                     continue
                 # The name also has to be matched to the PLATE name if it exists (else do unnamed wall plate address #)
-                plate_info = re.findall(rf"PLATE,{input_entity['address']},2,(\d+),([\w ]+)?",NPU_raw)
-                plate_name = plate_info[0][1] 
-                plate_area = areas[int(plate_info[0][0])]
-                if not plate_name:
+                plate_info = re.findall(rf"PLATE,{input_entity['address']},{input_entity['devcode']},(\d+),([\w ]+)?",NPU_raw)
+                if not plate_info:
+                    LOGGER.warning(f"[{self._hostname}] No plate information found for address {input_entity['address']} and devcode {input_entity['devcode']}. This is likely a bug in the eDIN+ system, please report to Mode Lighting.")
                     plate_name = f"Unnamed Wall Plate address {input_entity['address']}"
+                    plate_area = "Unknown area"
+                else:
+                    plate_name = plate_info[0][1] 
+                    plate_area = areas[int(plate_info[0][0])]
 
                 input_entity['name'] = plate_name
                 input_entity['area'] = plate_area
