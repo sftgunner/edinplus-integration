@@ -2,15 +2,17 @@
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://github.com/hacs/integration)
 
-Tested on HA 2022.12.6 - 2023.8 and eDIN+ firmware SW00120.2.4.1.44. 
+Tested on HA 2022.12.6 - 2025.7.1 and eDIN+ firmware SW00120.2.4.1.44. 
 
-Please note eDIN+ firmware SW00.120.2.3.x.x is **NOT** currently supported.
+Please note eDIN+ firmware SW00.120.2.3.x.x is **NOT** currently supported, as it doesn't support device discovery. 
 
-The state of this component is: Local Push
+You can find your NPU firmware version in "Settings & Upgrades" -> "Upgrade & Backups" -> "Firmware Maintenance". If you are running an older firmware please contact Mode Technical support (see [#11](https://github.com/sftgunner/edinplus-integration/issues/11)).
+
+The state of this component is Local Push
 
 This component communicates with the NPU over a combination of HTTP and TCP using port 26
 
-Inputs trigger device triggers that can be used for automation
+Inputs (keypads, IO modules etc) generate device triggers that can be used in HA automations automation
 
 ## Installation via HACS
 
@@ -67,14 +69,15 @@ HomeAssistant will then automatically discover all devices connected to the NPU,
 | Mode Sensor                      | DIN-MSENS-RM-T       | :x:                   |
 | Touch Screen 7" Tablet           | DIN-TS-07            | :x:                   |
 | Oslo Rotary controls             | DIN-RD-00-xx         | :x:                   |
-| EVO LCD Wall plate               | EVO-LCD-xx           | :x:                   |
-| Wall Plates (2, 5 and 10 button) | EVO-SGP-xx           | :white_check_mark:[^4]|
+| EVO LCD Wall plate               | EVO-LCD-xx           | :white_check_mark:[^4]|
+| Wall Plates (2, 5 and 10 button) | EVO-SGP-xx           | :white_check_mark:[^5]|
 | Contact Input Module             | EVO-INT-CI-xx        | :white_check_mark:    |
 
 [^1]: These aren't officially supported yet as I don't have the hardware to validate with, but functionality should be pretty close to the DIN-02-08-PLUS. If you use this device, it will flag up as a warning in the logs - please open an issue to confirm either that it functions as intended or to report any bugs, and I'll update this page accordingly.
 [^2]: 0-10V output and contact inputs are supported. Output channels will report their state as being "On" or "Off" (i.e. open or closed) using a sensor. DMX outputs are not supported.
 [^3]: These modules should not require any extra code to work, but haven't been verified to ensure that they don't cause issues.
-[^4]: Due to limitations of the NPU, all wall plates are assumed to be 10 button. These wall plates include Coolbrium, iCON, Geneva and EVO-Ellipse styles.
+[^4]: Input signals (device triggers) from this device are supported, but there is not currently any support for changing the text or button colour.
+[^5]: Due to limitations of the NPU, all wall plates are assumed to be 10 button. These wall plates include Coolbrium, iCON, Geneva and EVO-Ellipse styles. There is not currently any support for changing the button colour
 
 
 ## eDIN+
