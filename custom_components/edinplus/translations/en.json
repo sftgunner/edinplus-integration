@@ -3,15 +3,17 @@
         "step": {
             "user": {
                 "data": {
-                "host": "Hostname (IP address)",
-                "username": "username",
-                "password": "password"
+                    "host": "Hostname (IP address)",
+                    "tcp_port": "TCP Port",
+                    "username": "username",
+                    "password": "password"
                 }
             }
         },
         "error": {
             "cannot_connect": "Cannot connect to device",
             "invalid_auth": "Invalid authentication (username or password incorrect)",
+            "invalid_port": "Invalid TCP port (must be between 1 and 65535)",
             "unknown": "An unknown error occurred"
         },
         "abort": {

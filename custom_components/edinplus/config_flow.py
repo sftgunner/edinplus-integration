@@ -12,14 +12,17 @@ from homeassistant.core import HomeAssistant
 from .edinplus import edinplus_NPU_instance
 
 # Import constants
-from .const import DOMAIN
+from .const import DOMAIN, DEFAULT_TCP_PORT
 
 _LOGGER = logging.getLogger(__name__)
 
 # This is the schema that used to display the UI to the user.
-# At the moment user is just asked for the NPU address.
+# At the moment user is asked for the NPU address and TCP port.
 # In future it could be useful to add support for username/password if setup on NPU
-DATA_SCHEMA = vol.Schema({("host"): str})
+DATA_SCHEMA = vol.Schema({
+    vol.Required("host"): str,
+    vol.Optional("tcp_port", default=DEFAULT_TCP_PORT): int,
+})
 
 async def validate_input(hass: HomeAssistant, data: dict) -> dict[str, Any]:
     """Validate the user input allows us to connect.
@@ -36,10 +39,15 @@ async def validate_input(hass: HomeAssistant, data: dict) -> dict[str, Any]:
     if len(data["host"]) < 3:
         raise InvalidHost
 
+    # Validate TCP port range
+    tcp_port = data.get("tcp_port", DEFAULT_TCP_PORT)
+    if not (1 <= tcp_port <= 65535):
+        raise InvalidPort
+
     # NPU instance is initialised (see edinplus.py for more details)
     # This really ought to go through some verification to ensure the NPU is where it says it is, and supports TCP/HTTP without username/password
     # Have left example code below commented out for reference
-    hub = edinplus_NPU_instance(hass, data["host"],None)
+    hub = edinplus_NPU_instance(hass, data["host"], None, tcp_port)
     
     # # The dummy hub provides a `test_connection` method to ensure it's working
     # # as expected
@@ -91,6 +99,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 # comments on `DATA_SCHEMA` for further details.
                 # Set the error on the `host` field, not the entire form.
                 errors["host"] = "cannot_connect"
+            except InvalidPort:
+                # Set the error on the `tcp_port` field
+                errors["tcp_port"] = "invalid_port"
             except Exception:  # pylint: disable=broad-except
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
@@ -107,3 +118,7 @@ class CannotConnect(exceptions.HomeAssistantError):
 
 class InvalidHost(exceptions.HomeAssistantError):
     """Error to indicate there is an invalid hostname."""
+
+
+class InvalidPort(exceptions.HomeAssistantError):
+    """Error to indicate there is an invalid TCP port."""

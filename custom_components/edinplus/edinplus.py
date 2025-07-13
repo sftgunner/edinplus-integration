@@ -66,12 +66,12 @@ async def tcp_send_message_plus(writer,reader,message):
     # self.readlock = False
 
 class edinplus_NPU_instance:
-    def __init__(self,hass: HomeAssistant,hostname:str,entry_id) -> None:
+    def __init__(self,hass: HomeAssistant,hostname:str,entry_id,tcp_port=26) -> None:
         LOGGER.debug(f"[{hostname}] Initialising NPU instance")
         self._hostname = hostname
         self._hass = hass
         self._name = hostname
-        self._tcpport = 26 # This should be configurable using the config flow (as it's possible to change on the NPU)
+        self._tcpport = tcp_port # Configurable TCP port from config flow
         self._entry_id = entry_id
         self._id = f"edinplus-hub-{hostname.lower()}"
         self._endpoint = f"http://{hostname}/gateway?1" # NB although the 1 doesn't exist in the eDIN+ API spec for gateway endpoint, it's the only way to stop requests from stripping the ? completely (which results in /gateway, a 404)
@@ -367,7 +367,7 @@ class edinplus_NPU_instance:
         
         # Also check the system information every 10 minutes to see if the NPU has changed (i.e. new devices added, or removed)
         # This is used to trigger a re-discovery of the NPU configuration
-        async_track_time_interval(hass,self.async_edinplus_check_systeminfo, datetime.timedelta(seconds=15)) # Production
+        async_track_time_interval(hass,self.async_edinplus_check_systeminfo, datetime.timedelta(minutes=1)) # Production
 
 
     async def async_edinplus_discover_channels(self):

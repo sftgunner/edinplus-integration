@@ -19,7 +19,8 @@ PLATFORMS: list[str] = ["light","switch","button","binary_sensor","scene"]
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up NPU from config entry."""
     # This stores an instance of the NPU class that communicates with other devices
-    edinplus_npu = edinplus.edinplus_NPU_instance(hass, entry.data["host"], entry.entry_id)
+    tcp_port = entry.data.get("tcp_port", 26)  # Default to 26 if not specified
+    edinplus_npu = edinplus.edinplus_NPU_instance(hass, entry.data["host"], entry.entry_id, tcp_port)
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = edinplus_npu
     
     LOGGER.info(f"[{entry.data['host']}] Setting up eDIN+ NPU")
