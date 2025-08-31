@@ -196,7 +196,15 @@ class edinplus_NPU_instance:
                 self.continuousTCPMonitor.cancel()
                 # LOGGER.debug(f"[{self._hostname}] Status of monitor task is "+{str(self.continuousTCPMonitor.done())})
                 # await tcp_send_message_plus(self.writer,self.reader,f"$OK;")
-                await tcp_send_message(self.writer,"$OK;")
+                try:
+                    await tcp_send_message(self.writer,"$OK;")
+                except Exception as e:
+                    LOGGER.error(f"[{self._hostname}] Exception occurred while sending keep-alive: {e}")
+                    self.online = False
+                    LOGGER.error(f"[{self._hostname}] Failed to communicate with NPU: Unable to send keep-alive on port {self._tcpport}. Please check 'Gateway control' is enabled on port {self._tcpport} on the eDIN system. Attempting to re-establish TCP connection.")
+                    self.readlock = False
+                    await self.async_tcp_connect()
+                    return
                 try:
                     output = await asyncio.wait_for(tcp_receive_message(self.reader), timeout=5.0)
                     if output == "":
