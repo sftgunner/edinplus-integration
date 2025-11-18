@@ -1,45 +1,48 @@
-"""Python library to enable communication with eDIN+ for the HomeAssistant integration."""
+"""Core eDIN+ TCP/HTTP client used by the HomeAssistant integration.
 
-# To be considered for an official HomeAssistant integration, this will need to be separated from the rest of the integration and setup as a pypi library.
-# NB: This is currently not possible due to the dependency on async_track_time_interval
+This module intentionally contains **no** HomeAssistant dependencies so it can
+be reused as a standalone library. HomeAssistant specific glue code lives in
+the platform files (e.g. ``light.py``, ``switch.py``).
+"""
 
 from __future__ import annotations
+
 import asyncio
-import requests
 import logging
-import time
-import aiohttp
-import datetime
 import re
+from dataclasses import dataclass, field
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Set, Tuple
 
-from homeassistant.core import HomeAssistant
+import aiohttp
 
-from homeassistant.helpers.event import async_track_time_interval
-from homeassistant.helpers import device_registry as dr
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import (
-    CONF_DEVICE_ID,
-    CONF_HOST,
-    CONF_TOKEN,
-    CONF_TYPE,
-)
-
-# Import constants
-from .const import *
+from .const import *  # noqa: F401,F403 – re-exported for callers
 from .scene import edinplus_scene_instance
 
 LOGGER = logging.getLogger(__name__)
 
-# Interact with NPU using the TCP stream (the writer object should be stored in the NPU class)
-async def tcp_send_message(writer,message):
-    LOGGER.debug(f'TCP TX: {message!r}')
+TcpCallback = Callable[[], None]
+
+
+async def tcp_send_message(writer: asyncio.StreamWriter, message: str) -> None:
+    """Send a single line message over the TCP stream.
+
+    The NPU expects ASCII text terminated with ``;`` and ``"\n"``.
+    """
+
+    LOGGER.debug("TCP TX: %r", message)
     writer.write(message.encode())
     await writer.drain()
-    
-# Read messages from the NPU using the TCP stream (the reader object should be stored in the NPU class)
-async def tcp_receive_message(reader):
-    # if not reader.at_eof():
+
+
+async def tcp_receive_message(reader: asyncio.StreamReader) -> str:
+    """Read a single line message from the TCP stream.
+
+    Returns an empty string on EOF.
+    """
+
     data = await reader.readline()
+    if not data:
+        return ""
     return data.decode()
 
 # Async method of interrogating NPU via HTTP. 
@@ -50,67 +53,182 @@ async def async_retrieve_from_npu(endpoint):
             response = await resp.text()
     return response
 
-# Old TCP test function to try and write to TCP stream and immediately read acknowledgement (to verify change had been written correctly)
-# Unfortunately didn't work due to conflicts with existing pending tcp_receive_message
-async def tcp_send_message_plus(writer,reader,message):
-    LOGGER.debug(f'Sending_plus: {message!r}')
-    writer.write(message.encode())
-    await writer.drain()
-    # try:
-    #     async with asyncio.timeout(10):
-    #         data = await reader.readline()
-    #         LOGGER.debug(f'Acknowledgement: {data.decode()!r}')
-    #         # return data.decode()
-    # except TimeoutError:
-    #     print("ERR! Looks like NPU is offline: took more than 10 seconds to get a response.")
-    # self.readlock = False
+@dataclass
+class EdinPlusConfig:
+    """Configuration for an NPU connection and polling behaviour."""
+
+    hostname: str
+    tcp_port: int = 26
+    use_chan_to_scn_proxy: bool = True
+    keep_alive_interval: float = 1800.0  # seconds; NPU drops after ~3600s idle
+    keep_alive_timeout: float = 5.0
+    systeminfo_interval: float = 600.0
+    reconnect_delay: float = 5.0
+    max_reconnect_delay: float = 300.0
+
 
 class edinplus_NPU_instance:
-    def __init__(self,hass: HomeAssistant,hostname:str,entry_id,tcp_port=26) -> None:
-        LOGGER.debug(f"[{hostname}] Initialising NPU instance")
-        self._hostname = hostname
-        self._hass = hass
-        self._name = hostname
-        self._tcpport = tcp_port # Configurable TCP port from config flow
-        self._entry_id = entry_id
-        self._id = f"edinplus-hub-{hostname.lower()}"
-        self._endpoint = f"http://{hostname}/gateway?1" # NB although the 1 doesn't exist in the eDIN+ API spec for gateway endpoint, it's the only way to stop requests from stripping the ? completely (which results in /gateway, a 404)
-        # NB the endpoint should support alternative ports for http connection ideally (to be confirmed in config flow)
-        self.lights = []
-        self.switches = []
-        self.buttons = []
-        self.binary_sensors = []
-        self.scenes = []
-        self.manufacturer = "Mode Lighting"
-        self.model = "DIN-NPU-00-01-PLUS"
-        self.serial_num = None # Serial number of NPU interface, as an 8-digit hexadecimal value
-        self.edit_stamp = None # Text string representing when the last edit was saved
-        self.adjust_stamp = None # Text string representing when the last adjustment was saved
-        self.info_what_names = None # This is the raw data from the NPU when interrogating the /info?what=names endpoint
-        self.info_what_levels = None # This is the raw data from the NPU when interrogating the /info?what=levels endpoint
+    """Connection manager for a single eDIN+ NPU.
+
+    This class owns the TCP connection, background reader task and recovery
+    logic. Callers can await ``start()``/``stop()`` and subscribe to state
+    updates via the various channel / sensor instances.
+    """
+
+    def __init__(self, config: EdinPlusConfig) -> None:
+        hostname = config.hostname
+        LOGGER.debug("[%s] Initialising NPU instance", hostname)
+
+        self._config: EdinPlusConfig = config
+        self._hostname: str = hostname
+        self._name: str = hostname
+        self._tcpport: int = config.tcp_port
+
+        self._id: str = f"edinplus-hub-{hostname.lower()}"
+        # NB the endpoint should support alternative ports for http connection ideally
+        self._endpoint: str = (
+            f"http://{hostname}/gateway?1"
+        )  # ``?1`` prevents stripping of ``?``
+
+        # Collections populated by discovery
+        self.lights: List[edinplus_dimmer_channel_instance] = []
+        # These lists are populated by discovery; typed at runtime to avoid
+        # forward-reference issues during module import.
+        self.switches: List[Any] = []
+        self.buttons: List[Any] = []
+        self.binary_sensors: List[Any] = []
+        self.scenes: List[edinplus_scene_instance] = []
+
+        self.manufacturer: str = "Mode Lighting"
+        self.model: str = "DIN-NPU-00-01-PLUS"
+        self.serial_num: Optional[str] = None
+        self.edit_stamp: Optional[str] = None
+        self.adjust_stamp: Optional[str] = None
+        self.info_what_names: Optional[str] = None
+        self.info_what_levels: Optional[str] = None
+
+        self.reader: Optional[asyncio.StreamReader] = None
+        self.writer: Optional[asyncio.StreamWriter] = None
+
+        self._monitor_task: Optional[asyncio.Task[Any]] = None
+        self._keepalive_task: Optional[asyncio.Task[Any]] = None
+        self._systeminfo_task: Optional[asyncio.Task[Any]] = None
+        self._stop_event: asyncio.Event = asyncio.Event()
+
+        self._use_chan_to_scn_proxy: bool = config.use_chan_to_scn_proxy
+        self.chan_to_scn_proxy: Dict[str, int] = {}
+        self.chan_to_scn_proxy_fadetime: Dict[str, int] = {}
+        self.areas: Dict[int, str] = {}
+
+        self.online: bool = False
+        self.comms_retry_attempts: int = 0
+        self.comms_max_retry_attempts: int = 5
+        self._reconnect_delay: float = config.reconnect_delay
+
+        # Callbacks for button / input events (device automation in HA will
+        # subscribe via a thin wrapper but this module stays generic).
+        self._button_event_callbacks: Set[
+            Callable[[Dict[str, Any]], Awaitable[None]]
+        ] = set()
+
+        LOGGER.debug("[%s] NPU instance initialised", hostname)
+
+    # ------------------------------------------------------------------
+    # Event subscription (used by HA device triggers via wrapper code)
+    # ------------------------------------------------------------------
+
+    def register_button_event_callback(
+        self, callback: Callable[[Dict[str, Any]], Awaitable[None]]
+    ) -> None:
+        """Register an async callback for button / input events.
+
+        The callback receives a payload with at least ``device_uuid`` and
+        ``type`` describing the event.
+        """
+
+        self._button_event_callbacks.add(callback)
+
+    def remove_button_event_callback(
+        self, callback: Callable[[Dict[str, Any]], Awaitable[None]]
+    ) -> None:
+        """Remove a previously registered button / input callback."""
+
+        self._button_event_callbacks.discard(callback)
+
+    async def _dispatch_button_event(self, payload: Dict[str, Any]) -> None:
+        """Dispatch a button or input event to all subscribers."""
+
+        if not self._button_event_callbacks:
+            return
+
+        for cb in list(self._button_event_callbacks):
+            try:
+                await cb(payload)
+            except Exception as exc:  # pragma: no cover - defensive logging
+                LOGGER.error("[%s] Button event callback failed: %s", self._hostname, exc)
+
+    # ------------------------------------------------------------------
+    # Lifecycle management
+    # ------------------------------------------------------------------
+
+    async def start(self) -> None:
+        """Connect to the NPU and start background monitoring.
+
+        This method is idempotent.
+        """
+
+        if self._monitor_task and not self._monitor_task.done():
+            return
+
+        self._stop_event.clear()
+        await self._ensure_connected()
+
+        loop = asyncio.get_running_loop()
+        self._monitor_task = loop.create_task(self._monitor_loop(), name=f"edinplus-monitor-{self._hostname}")
+        self._keepalive_task = loop.create_task(self._keepalive_loop(), name=f"edinplus-keepalive-{self._hostname}")
+        self._systeminfo_task = loop.create_task(self._systeminfo_loop(), name=f"edinplus-systeminfo-{self._hostname}")
+
+    async def stop(self) -> None:
+        """Stop background tasks and close the TCP connection."""
+
+        self._stop_event.set()
+
+        for task in (self._monitor_task, self._keepalive_task, self._systeminfo_task):
+            if task is not None:
+                task.cancel()
+
+        self._monitor_task = None
+        self._keepalive_task = None
+        self._systeminfo_task = None
+
+        if self.writer is not None:
+            try:
+                self.writer.close()
+                await self.writer.wait_closed()
+            except Exception:  # pragma: no cover - best-effort close
+                LOGGER.debug("[%s] Error while closing writer", self._hostname)
+
         self.reader = None
         self.writer = None
-        self.continuousTCPMonitor = None # For the coroutine task that monitors the TCP stream
-        self.readlock = False
-        self._callbacks = set()
-        self._use_chan_to_scn_proxy = True # This should be offered in config flow (although not sure why you would ever not want it)
-        self.chan_to_scn_proxy = {}
-        self.chan_to_scn_proxy_fadetime = {}
-        self.areas = {}
         self.online = False
-        self.comms_retry_attempts = 0 
-        self.comms_max_retry_attempts = 5 # The number of retries before we try and re-establish the TCP connection
-        LOGGER.debug(f"[{hostname}] NPU instance initialised")
     
-    async def discover(self):
+    async def discover(self) -> None:
         # Discover areas first
         self.areas = await self.async_edinplus_discover_areas()
         # Discover all lighting channels on devices connected to NPU
-        self.lights,self.switches,self.buttons,self.binary_sensors = await self.async_edinplus_discover_channels()
+        (
+            self.lights,
+            self.switches,
+            self.buttons,
+            self.binary_sensors,
+        ) = await self.async_edinplus_discover_channels()
         # Discover all scenes on the NPU
         self.scenes = await self.async_edinplus_discover_scenes()
         # Search to see if a channel has a unique scene with just it in - if so, toggle that scene rather than the channel (as keeps NPU happier!)
-        self.chan_to_scn_proxy,self.chan_to_scn_proxy_fadetime = await self.async_edinplus_map_chans_to_scns()
+        (
+            self.chan_to_scn_proxy,
+            self.chan_to_scn_proxy_fadetime,
+        ) = await self.async_edinplus_map_chans_to_scns()
         # Get the status for each light
         for light in self.lights:
             await light.tcp_force_state_inform()
@@ -121,14 +239,22 @@ class edinplus_NPU_instance:
         for binary_sensor in self.binary_sensors:
             await binary_sensor.tcp_force_state_inform()
             
-    async def async_edinplus_check_systeminfo(self,now=None):
+    async def async_edinplus_check_systeminfo(self) -> None:
         # Download and store the NPU configuration endpoints
-        self.info_what_names = await async_retrieve_from_npu(f"http://{self._hostname}/info?what=names")
-        self.info_what_levels = await async_retrieve_from_npu(f"http://{self._hostname}/info?what=levels")
+        self.info_what_names = await async_retrieve_from_npu(
+            f"http://{self._hostname}/info?what=names"
+        )
+        self.info_what_levels = await async_retrieve_from_npu(
+            f"http://{self._hostname}/info?what=levels"
+        )
         
         # Check system information from the NPU
         # This is used to get the serial number, edit and adjust timestamps
         # try:
+        if not self.info_what_levels:
+            LOGGER.debug("[%s] No system info available yet", self._hostname)
+            return
+
         systeminfo = re.findall(r"!SYSTEMID,(\d+),(\d+-\d+),(\d+-\d+)", self.info_what_levels)
         if systeminfo and len(systeminfo[0]) == 3:
             serial_num, edit_stamp, adjust_stamp = systeminfo[0]
@@ -151,103 +277,179 @@ class edinplus_NPU_instance:
         #     LOGGER.error(self.info_what_levels)
 
 
-    async def async_tcp_connect(self):
-        # Create a TCP connection to the NPU
-        LOGGER.debug(f"[{self._hostname}] Establishing TCP connection to {self._hostname} on port {self._tcpport}")
-        try:
-            reader,writer = await asyncio.open_connection(self._hostname, self._tcpport)
-            self.online = True
-        except:
-            LOGGER.error(f"[{self._hostname}] Unable to establish TCP connection to eDIN+ NPU. Check hostname '{self._hostname}' and that port {self._tcpport} is open.")
-            self.online = False
-        if self.online:
-            # Assign reader and writer objects from asyncio to the NPU class
-            self.reader = reader
-            self.writer = writer
-            # Register to receive all events
-            await tcp_send_message(self.writer,'$EVENTS,1;')
-            output = await tcp_receive_message(self.reader)
-            # Output should be !GATRDY; if all ok with the TCP connection
+    async def _ensure_connected(self) -> None:
+        """Ensure there is an active TCP connection to the NPU.
 
-            if output.rstrip() == "":
-                LOGGER.error(f"[{self._hostname}] eDIN+ integration not getting any TCP response from the NPU.")
-                LOGGER.error(f"[{self._hostname}] Try rebooting the NPU (Configuration -> Tools -> Reinitialise system -> Reboot system) and then reload the integration in HomeAssistant")
-            elif output.rstrip() == "!GATRDY;":
-                LOGGER.info(f"[{self._hostname}] TCP connection established successfully")
-            else:
-                LOGGER.error(f"[{self._hostname}] TCP connection not ready; received message: {output}")
+        Handles initial connection and re-connects with exponential backoff on
+        failure. This method is safe to call repeatedly.
+        """
 
-    async def async_keep_tcp_alive(self,now=None):
-        # This serves two purposes - to keep the connection alive and also to check that it hasn't been terminated at the other end
-        # NPU will terminate TCP connection if no activity for an hour (to verify)
-        # In future, could be more useful to use this function to check that the NPU configuration hasn't changed (and if it has, to re-run discover to find the added/removed devices)
-        
-        # NB the communication logic seems to be a bit flaky, due to asyncio reader not timing out correctly (i.e. it's still waiting for additional bytes when in fact the connection has closed). This also has potential to overload the NPU if connection not properly terminated
-        if self.online:
-            if self.comms_retry_attempts >= self.comms_max_retry_attempts:
-                LOGGER.warning(f"[{self._hostname}] Max retries on TCP connection reached. Attempting to re-establish TCP connection")
+        if self.online and self.reader is not None and self.writer is not None:
+            return
+
+        while not self._stop_event.is_set():
+            LOGGER.debug(
+                "[%s] Establishing TCP connection to %s on port %s",
+                self._hostname,
+                self._hostname,
+                self._tcpport,
+            )
+            try:
+                reader, writer = await asyncio.open_connection(
+                    self._hostname, self._tcpport
+                )
+                self.reader = reader
+                self.writer = writer
+                self.online = True
                 self.comms_retry_attempts = 0
-                await self.async_tcp_connect()
-            else:
-                LOGGER.debug(f"[{self._hostname}] Sending TCP keep-alive")
-                self.readlock = True
-                LOGGER.debug(f"[{self._hostname}] Locking reads and cancelling continuous task")
-                # NB This cancellation isn't reliable at the moment)
-                self.continuousTCPMonitor.cancel()
-                # LOGGER.debug(f"[{self._hostname}] Status of monitor task is "+{str(self.continuousTCPMonitor.done())})
-                # await tcp_send_message_plus(self.writer,self.reader,f"$OK;")
-                try:
-                    await tcp_send_message(self.writer,"$OK;")
-                except Exception as e:
-                    LOGGER.error(f"[{self._hostname}] Exception occurred while sending keep-alive: {e}")
-                    self.online = False
-                    LOGGER.error(f"[{self._hostname}] Failed to communicate with NPU: Unable to send keep-alive on port {self._tcpport}. Please check 'Gateway control' is enabled on port {self._tcpport} on the eDIN system. Attempting to re-establish TCP connection.")
-                    self.readlock = False
-                    await self.async_tcp_connect()
+                self._reconnect_delay = self._config.reconnect_delay
+
+                # Register to receive all events
+                await tcp_send_message(self.writer, "$EVENTS,1;")
+                output = await tcp_receive_message(self.reader)
+
+                if output.rstrip() == "":
+                    LOGGER.error(
+                        "[%s] No TCP response from NPU after registration.",
+                        self._hostname,
+                    )
+                elif output.rstrip() == "!GATRDY;":
+                    LOGGER.info("[%s] TCP connection established successfully", self._hostname)
                     return
+                else:
+                    LOGGER.error(
+                        "[%s] TCP connection not ready; received message: %s",
+                        self._hostname,
+                        output,
+                    )
+            except Exception as exc:  # pragma: no cover - network error path
+                LOGGER.error(
+                    "[%s] Unable to establish TCP connection: %s",
+                    self._hostname,
+                    exc,
+                )
+
+            self.online = False
+            LOGGER.info(
+                "[%s] Retrying TCP connection in %.1fs",
+                self._hostname,
+                self._reconnect_delay,
+            )
+            try:
+                await asyncio.wait_for(self._stop_event.wait(), timeout=self._reconnect_delay)
+                return
+            except asyncio.TimeoutError:
+                pass
+
+            self._reconnect_delay = min(
+                self._reconnect_delay * 2, self._config.max_reconnect_delay
+            )
+
+    async def _keepalive_loop(self) -> None:
+        """Periodic keep-alive that also validates the connection.
+
+        If the keep-alive fails repeatedly, the TCP connection is dropped and a
+        reconnect is scheduled by the monitor loop.
+        """
+
+        interval = self._config.keep_alive_interval
+
+        try:
+            while not self._stop_event.is_set():
+                await asyncio.wait_for(
+                    self._stop_event.wait(), timeout=interval
+                )
+                if self._stop_event.is_set():
+                    break
+
+                if not self.online or self.writer is None or self.reader is None:
+                    continue
+
+                LOGGER.debug("[%s] Sending TCP keep-alive", self._hostname)
                 try:
-                    output = await asyncio.wait_for(tcp_receive_message(self.reader), timeout=5.0)
+                    await tcp_send_message(self.writer, "$OK;")
+                    output = await asyncio.wait_for(
+                        tcp_receive_message(self.reader),
+                        timeout=self._config.keep_alive_timeout,
+                    )
                     if output == "":
                         self.comms_retry_attempts += 1
-                        LOGGER.error(f"[{self._hostname}] Failed to communicate with NPU: Empty response on port {self._tcpport}. Please check 'Gateway control' is enabled on port {self._tcpport} on the eDIN system.  Attempt {self.comms_retry_attempts}/{self.comms_max_retry_attempts} before re-establishing connection.")
+                        LOGGER.error(
+                            "[%s] Empty keep-alive response (attempt %s/%s)",
+                            self._hostname,
+                            self.comms_retry_attempts,
+                            self.comms_max_retry_attempts,
+                        )
                     else:
                         self.comms_retry_attempts = 0
-                        LOGGER.debug(f"[{self._hostname}] Keep-alive acknowledged: {output}")
-                except asyncio.TimeoutError:
+                        LOGGER.debug(
+                            "[%s] Keep-alive acknowledged: %s",
+                            self._hostname,
+                            output,
+                        )
+                except (asyncio.TimeoutError, RuntimeError, OSError) as exc:
                     self.comms_retry_attempts += 1
-                    LOGGER.error(f"[{self._hostname}] No acknowledgement after 5 seconds. NPU might be offline? Attempt {self.comms_retry_attempts}/{self.comms_max_retry_attempts} before re-establishing connection.")
-                except RuntimeError: # Catch the runtime error "RuntimeError: readuntil() called while another coroutine is already waiting for incoming data" to avoid readlock getting stuck in True
-                    LOGGER.warning(f"[{self._hostname}] Caught Runtime error during keep-alive")
-                LOGGER.debug(f"[{self._hostname}] Unlocking reads")
-                self.readlock = False
-        else:
-            LOGGER.error(f"[{self._hostname}] eDIN+ TCP connection still offline. Attempting to re-establish TCP connection.")
-            await self.async_tcp_connect()
+                    LOGGER.error(
+                        "[%s] Keep-alive failed (%s) attempt %s/%s",
+                        self._hostname,
+                        exc,
+                        self.comms_retry_attempts,
+                        self.comms_max_retry_attempts,
+                    )
+
+                if self.comms_retry_attempts >= self.comms_max_retry_attempts:
+                    LOGGER.warning(
+                        "[%s] Max keep-alive retries reached; dropping TCP connection",
+                        self._hostname,
+                    )
+                    if self.writer is not None:
+                        try:
+                            self.writer.close()
+                            await self.writer.wait_closed()
+                        except Exception:
+                            pass
+                    self.reader = None
+                    self.writer = None
+                    self.online = False
+                    self.comms_retry_attempts = 0
+        except asyncio.CancelledError:  # pragma: no cover - cooperative cancel
+            LOGGER.debug("[%s] Keep-alive loop cancelled", self._hostname)
+
+    async def _systeminfo_loop(self) -> None:
+        """Periodically refresh system information and trigger rediscovery."""
+
+        interval = self._config.systeminfo_interval
+
+        try:
+            while not self._stop_event.is_set():
+                await asyncio.wait_for(
+                    self._stop_event.wait(), timeout=interval
+                )
+                if self._stop_event.is_set():
+                    break
+
+                if not self.online:
+                    continue
+
+                await self.async_edinplus_check_systeminfo()
+        except asyncio.CancelledError:  # pragma: no cover
+            LOGGER.debug("[%s] Systeminfo loop cancelled", self._hostname)
     
 
-    async def async_response_handler(self,response):
-        # Handle any messages read from the TCP stream
+    async def async_response_handler(self, response: str) -> None:
+        """Handle any messages read from the TCP stream."""
+
         if response != "":
-            LOGGER.debug(f"[{self._hostname}] TCP RX: {response}")
+            LOGGER.debug("[%s] TCP RX: %s", self._hostname, response)
             response_type = response.split(',')[0]
             # Parse response and determine what to do with it
             if response_type == "!INPSTATE":
-                # !INPSTATE means a contact module press, meaning an event needs to be triggered with the relevant information
-                # This is then processed using device_trigger.py to reassign this event (which is just JSON) to a device in the HA GUI.
-                # try:
+                # !INPSTATE means a contact module press.
                 address = int(response.split(',')[1])
                 channel = int(response.split(',')[3])
                 newstate_numeric = int(response.split(',')[4][:3])
                 newstate = NEWSTATE_TO_BUTTONEVENT[newstate_numeric]
                 uuid = f"edinplus-{self.serial_num}-{address}-{channel}"
-                # Get the HA device ID that triggered the event 
-                device_registry = dr.async_get(self._hass)
-
-                LOGGER.debug(f"[{self._hostname}] Creating or getting device in registry with no name and id {uuid}")
-                device_entry = device_registry.async_get_or_create(
-                    config_entry_id=self._entry_id,
-                    identifiers={(DOMAIN, uuid)},
-                )
                 found_binary_sensor_channel = False
                 for binary_sensor in self.binary_sensors:
                     if binary_sensor.channel == channel and binary_sensor._address == address:
@@ -261,14 +463,22 @@ class edinplus_NPU_instance:
                         binary_sensor._is_on = (newstate_numeric > 0)
                         for callback in binary_sensor._callbacks:
                             callback()
-                if (found_binary_sensor_channel == False):
+                if not found_binary_sensor_channel:
                     LOGGER.warning(f"[{self._hostname}] Binary sensor without corresponding entity found; address {address}, channel {channel}")
 
-                if (binary_sensor_discovery_in_progress):
-                    LOGGER.debug(f"[{self._hostname}] NOT Firing event for contact module device {uuid} with trigger type {newstate} as discovery active")
-                else:
-                    LOGGER.debug(f"[{self._hostname}] Firing event for contact module device {uuid} with trigger type {newstate}")
-                    self._hass.bus.fire(EDINPLUS_EVENT, {CONF_DEVICE_ID: device_entry.id, CONF_TYPE: newstate})
+                if not binary_sensor_discovery_in_progress:
+                    LOGGER.debug(
+                        "[%s] Dispatching input event for %s (%s)",
+                        self._hostname,
+                        uuid,
+                        newstate,
+                    )
+                    await self._dispatch_button_event(
+                        {
+                            "device_uuid": uuid,
+                            "type": newstate,
+                        }
+                    )
                 # except:
                 #     # This try except was a debugging step due to a small typo in an earlier version of the code - it should be safe to remove/move outside the if else clause
                 #     LOGGER.warning(f"[{self._hostname}] An error occurred when firing event for contact module device {address}-{channel} with trigger type {newstate_numeric}")
@@ -285,18 +495,20 @@ class edinplus_NPU_instance:
                 # NB need to exclude channel in place of whole keypad
                 newstate_numeric = int(response.split(',')[4][:3])
                 newstate = f"Button {channel} {NEWSTATE_TO_BUTTONEVENT[newstate_numeric]}"
-                uuid = f"edinplus-{self.serial_num}-{address}-1" # Channel is always 1 in the UUID for a keypad due to the way that the NPU presents keypads
-                # Get the HA device ID that triggered the event 
-                device_registry = dr.async_get(self._hass)
+                uuid = f"edinplus-{self.serial_num}-{address}-1"  # Channel is always 1 in the UUID for a keypad
 
-                LOGGER.debug(f"[{self._hostname}] Creating or getting device in registry with no name and id {uuid}")
-                device_entry = device_registry.async_get_or_create(
-                    config_entry_id=self._entry_id,
-                    identifiers={(DOMAIN, uuid)},
+                LOGGER.debug(
+                    "[%s] Dispatching keypad event for %s (%s)",
+                    self._hostname,
+                    uuid,
+                    newstate,
                 )
-                
-                LOGGER.debug(f"[{self._hostname}] Firing event for keypad module device {uuid} with trigger type {newstate}")
-                self._hass.bus.fire(EDINPLUS_EVENT, {CONF_DEVICE_ID: device_entry.id, CONF_TYPE: newstate})
+                await self._dispatch_button_event(
+                    {
+                        "device_uuid": uuid,
+                        "type": newstate,
+                    }
+                )
 
             elif (response_type == '!CHANFADE')or(response_type == '!CHANLEVEL'):
                 LOGGER.debug(f"[{self._hostname}] Channel fade/level received: {response}")
@@ -346,56 +558,69 @@ class edinplus_NPU_instance:
             else:
                 LOGGER.debug(f"[{self._hostname}] Unknown TCP response: {response}")
 
-    async def async_monitor_tcp(self,now=None):
-        # This is the function that keeps track of any new messages on the TCP stream, triggered every 0.01s by the function monitor below
-        if self.online:
-            if self.readlock:
-                # Unable to read as reading already in progress (as this is scheduled for every 0.01s, most of the time no new data will have arrived, so the previous async_monitor_tcp will still be waiting for an EOF)
-                pass
-            else:
-                # Set readlock to ensure that we don't have multiple functions trying to read from the stream simultaneously
-                self.readlock = True
-                # In theory if you run tcp_receive_message as a task, it can then be cancelled, but this doesn't seem to be reliable
-                self.continuousTCPMonitor = asyncio.create_task(tcp_receive_message(self.reader))
-                response = await self.continuousTCPMonitor
-                await self.async_response_handler(response)
-                # Unlock reads - if the continuousTCPMonitor has finished, then an EOF has been reached, so this function needs to be re-run
-                self.readlock = False
-            
+    async def _monitor_loop(self) -> None:
+        """Continuously read from the TCP stream and dispatch messages.
 
-    async def monitor(self, hass: HomeAssistant) -> None:
-        # As discussed above, try and monitor the TCP stream every 0.01s - this will nearly always immediately end, assuming there is already an existing instance of the function waiting for an EOF
-        async_track_time_interval(hass,self.async_monitor_tcp, datetime.timedelta(seconds=0.01))
-        
-        # For production, ideally only keep tcp alive every half hour (as NPU will terminate TCP stream if no activity for 60 minutes)
-        # However, for debugging/development, this has been set to every 10 seconds (especially useful for trying to test the ability of the integration to recover when the NPU goes offline and then later online.
-        
-        async_track_time_interval(hass,self.async_keep_tcp_alive, datetime.timedelta(minutes=10)) # Production
-        # async_track_time_interval(hass,self.async_keep_tcp_alive, datetime.timedelta(seconds=10)) # Development
-        
-        # Also check the system information every 10 minutes to see if the NPU has changed (i.e. new devices added, or removed)
-        # This is used to trigger a re-discovery of the NPU configuration
-        async_track_time_interval(hass,self.async_edinplus_check_systeminfo, datetime.timedelta(minutes=1)) # Production
+        This loop self-recovers by re-establishing the TCP connection whenever
+        the reader hits EOF or raises an error.
+        """
+
+        try:
+            while not self._stop_event.is_set():
+                await self._ensure_connected()
+                if not self.online or self.reader is None:
+                    # Connection could not be established and stop was requested
+                    await asyncio.sleep(1)
+                    continue
+
+                try:
+                    response = await tcp_receive_message(self.reader)
+                except (asyncio.IncompleteReadError, OSError) as exc:
+                    LOGGER.error(
+                        "[%s] TCP read error: %s – will reconnect",
+                        self._hostname,
+                        exc,
+                    )
+                    self.online = False
+                    if self.writer is not None:
+                        try:
+                            self.writer.close()
+                            await self.writer.wait_closed()
+                        except Exception:
+                            pass
+                    self.reader = None
+                    self.writer = None
+                    continue
+
+                if response == "":
+                    # EOF – drop connection and try again
+                    LOGGER.warning(
+                        "[%s] TCP stream closed by remote host – reconnecting",
+                        self._hostname,
+                    )
+                    self.online = False
+                    if self.writer is not None:
+                        try:
+                            self.writer.close()
+                            await self.writer.wait_closed()
+                        except Exception:
+                            pass
+                    self.reader = None
+                    self.writer = None
+                    continue
+
+                await self.async_response_handler(response)
+        except asyncio.CancelledError:  # pragma: no cover - cooperative cancel
+            LOGGER.debug("[%s] Monitor loop cancelled", self._hostname)
 
 
     async def async_edinplus_discover_channels(self):
-        device_registry = dr.async_get(self._hass)
-        # Add the NPU into the device registry - not required, but it makes things neater, and means the NPU shows up as a device in HA (and also appropriately shows device hierarchy)
-        LOGGER.debug(f"[{self._hostname}] Creating NPU device in registry: {self._name} ({self._id})")
-        device_registry.async_get_or_create(
-            config_entry_id = self._entry_id,
-            identifiers={(DOMAIN, self._id)},
-            manufacturer=self.manufacturer,
-            name=f"NPU ({self._name})",
-            model=self.model,
-            configuration_url=f"http://{self._hostname}",
-        )
+        """Discover channels using the ``info?what=names`` payload."""
 
-        # Run initial discovery using HTTP to establish what exists on the eDIN+ system linked to the NPU (returned in CSV format)
-        dimmer_channel_instances = []
-        relay_channel_instances = []
-        relay_pulse_instances = []
-        binary_sensor_instances = []
+        dimmer_channel_instances: List[edinplus_dimmer_channel_instance] = []
+        relay_channel_instances: List[edinplus_relay_channel_instance] = []
+        relay_pulse_instances: List[edinplus_relay_pulse_instance] = []
+        binary_sensor_instances: List[edinplus_input_binary_sensor_instance] = []
 
         NPU_raw = self.info_what_names
 
@@ -500,19 +725,6 @@ class edinplus_NPU_instance:
             
             LOGGER.debug(f"[{self._hostname}] Input entity found: {input_entity['model']} '{input_entity['name']}' (id: {input_entity['id']})")
 
-            LOGGER.debug(f"[{self._hostname}] Creating device in registry: {input_entity['full_name']} ({input_entity['id']})")
-
-            device_registry.async_get_or_create(
-                config_entry_id = self._entry_id,
-                identifiers={(DOMAIN, input_entity['id'])},
-                manufacturer=self.manufacturer,
-                # name=f"Light switch ({input_entity['name']})",
-                name=input_entity['full_name'],
-                suggested_area=input_entity['area'],
-                model=input_entity['model'],
-                via_device=(DOMAIN,self._id),
-            )
-
         LOGGER.info(f"[{self._hostname}] Channel discovery completed: {len(dimmer_channel_instances)} dimmers, {len(relay_channel_instances)} relays, {len(relay_pulse_instances)} pulse buttons, {len(binary_sensor_instances)} binary sensors")
         return dimmer_channel_instances,relay_channel_instances,relay_pulse_instances,binary_sensor_instances
 
@@ -612,6 +824,9 @@ class edinplus_relay_channel_instance:
 
     async def tcp_force_state_inform(self):
         # A function to force a channel to report its current status to the TCP stream
+        if self.hub.writer is None or not self.hub.online:
+            LOGGER.debug(f"[{self.hub._hostname}] Skipping state request for relay {self._address}-{self._channel} - not connected")
+            return
         LOGGER.debug(f"[{self.hub._hostname}] Requesting state for relay {self._address}-{self._channel}")
         await tcp_send_message(self.hub.writer,f"?CHAN,{self._address},{self._devcode},{self._channel};")
 
@@ -687,6 +902,9 @@ class edinplus_input_binary_sensor_instance:
 
     async def tcp_force_state_inform(self):
         # A function to force an input channel to report its current status to the TCP stream
+        if self.hub.writer is None or not self.hub.online:
+            LOGGER.debug(f"[{self.hub._hostname}] Skipping state request for input {self._address}-{self._channel} - not connected")
+            return
         LOGGER.debug(f"[{self.hub._hostname}] Requesting state for input {self._address}-{self._channel}")
         await tcp_send_message(self.hub.writer,f"?INP,{self._address},{self._devcode},{self._channel};")
 
@@ -771,6 +989,9 @@ class edinplus_dimmer_channel_instance:
 
     async def tcp_force_state_inform(self):
         # A function to force a channel to report its current status to the TCP stream
+        if self.hub.writer is None or not self.hub.online:
+            LOGGER.debug(f"[{self.hub._hostname}] Skipping state request for dimmer {self._dimmer_address}-{self._channel} - not connected")
+            return
         LOGGER.debug(f"[{self.hub._hostname}] Requesting state for dimmer {self._dimmer_address}-{self._channel}")
         await tcp_send_message(self.hub.writer,f"?CHAN,{self._dimmer_address},{self._devcode},{self._channel};")
 

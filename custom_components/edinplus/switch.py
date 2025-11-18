@@ -4,8 +4,6 @@ from __future__ import annotations
 from typing import Any
 
 import logging
-
-from .edinplus import edinplus_relay_channel_instance
 from .const import DOMAIN
 
 from homeassistant.helpers.entity import DeviceInfo
@@ -28,8 +26,11 @@ async def async_setup_entry(
     # __init__.async_setup_entry function
     npu = hass.data[DOMAIN][config_entry.entry_id]
 
-    # Add all entities to HA
-    async_add_entities(EdinPlusSwitchChannel(switch) for switch in npu.switches)
+    # Add all entities to HA; these are low-level relay channel objects but we
+    # treat them via the switch wrapper class only.
+    async_add_entities(
+        EdinPlusSwitchChannel(switch) for switch in npu.switches
+    )
 
 class EdinPlusSwitchChannel(SwitchEntity):
     """Representation of an eDIN+ Switch Channel."""
