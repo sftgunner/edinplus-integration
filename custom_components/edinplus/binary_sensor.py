@@ -4,8 +4,6 @@ from __future__ import annotations
 from typing import Any
 
 import logging
-
-from .edinplus import edinplus_input_binary_sensor_instance
 from .const import DOMAIN
 
 from homeassistant.helpers.entity import DeviceInfo
@@ -28,8 +26,11 @@ async def async_setup_entry(
     # __init__.async_setup_entry function
     npu = hass.data[DOMAIN][config_entry.entry_id]
 
-    # Add all entities to HA
-    async_add_entities(EdinPlusBinarySensor(binary_sensor) for binary_sensor in npu.binary_sensors)
+    # Add all entities to HA; they are low-level channel objects from
+    # ``edinplus.py`` but we don't depend on their concrete class here.
+    async_add_entities(
+        EdinPlusBinarySensor(binary_sensor) for binary_sensor in npu.binary_sensors
+    )
 
 class EdinPlusBinarySensor(BinarySensorEntity):
     """Representation of an eDIN+ Binary Sensor."""

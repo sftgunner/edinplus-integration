@@ -9,7 +9,7 @@ import voluptuous as vol
 from homeassistant import config_entries, exceptions
 from homeassistant.core import HomeAssistant
 
-from .edinplus import edinplus_NPU_instance
+from .edinplus import edinplus_NPU_instance, EdinPlusConfig
 
 # Import constants
 from .const import DOMAIN, DEFAULT_TCP_PORT
@@ -47,7 +47,8 @@ async def validate_input(hass: HomeAssistant, data: dict) -> dict[str, Any]:
     # NPU instance is initialised (see edinplus.py for more details)
     # This really ought to go through some verification to ensure the NPU is where it says it is, and supports TCP/HTTP without username/password
     # Have left example code below commented out for reference
-    hub = edinplus_NPU_instance(hass, data["host"], None, tcp_port)
+    config = EdinPlusConfig(hostname=data["host"], tcp_port=tcp_port)
+    hub = edinplus_NPU_instance(config)
     
     # # The dummy hub provides a `test_connection` method to ensure it's working
     # # as expected

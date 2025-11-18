@@ -4,8 +4,6 @@ from __future__ import annotations
 from typing import Any
 
 import logging
-
-from .edinplus import edinplus_relay_pulse_instance
 from .const import DOMAIN
 
 from homeassistant.helpers.entity import DeviceInfo
@@ -28,8 +26,11 @@ async def async_setup_entry(
     # __init__.async_setup_entry function
     npu = hass.data[DOMAIN][config_entry.entry_id]
 
-    # Add all entities to HA
-    async_add_entities(EdinPlusRelayPulseButton(button) for button in npu.buttons)
+    # Add all entities to HA; these are low-level button objects from the
+    # TCP client module, but this wrapper only relies on their public API.
+    async_add_entities(
+        EdinPlusRelayPulseButton(button) for button in npu.buttons
+    )
 
 class EdinPlusRelayPulseButton(ButtonEntity):
     """Representation of an eDIN+ Relay Pulse Button."""
