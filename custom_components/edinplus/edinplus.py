@@ -11,6 +11,7 @@ import asyncio
 import logging
 import re
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Set, Tuple
 
 import aiohttp
@@ -124,6 +125,9 @@ class edinplus_NPU_instance:
         self.comms_retry_attempts: int = 0
         self.comms_max_retry_attempts: int = 5
         self._reconnect_delay: float = config.reconnect_delay
+
+        # Timestamp of the last successfully received TCP message from the NPU
+        self.last_message_received: Optional[datetime] = None
 
         # Callbacks for button / input events (device automation in HA will
         # subscribe via a thin wrapper but this module stays generic).
@@ -440,6 +444,8 @@ class edinplus_NPU_instance:
         """Handle any messages read from the TCP stream."""
 
         if response != "":
+            # Record the time of the last valid message from the NPU
+            self.last_message_received = datetime.now(timezone.utc)
             LOGGER.debug("[%s] TCP RX: %s", self._hostname, response)
             response_type = response.split(',')[0]
             # Parse response and determine what to do with it

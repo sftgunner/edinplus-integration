@@ -19,5 +19,21 @@
         "abort": {
             "already_configured": "This device has already been configured"
         }
+    },
+    "entity": {
+        "sensor": {
+            "last_npu_message": {
+                "name": "Last NPU message"
+            },
+            "npu_online": {
+                "name": "NPU online state"
+            },
+            "npu_comms_retries": {
+                "name": "NPU comms retries"
+            },
+            "npu_reconnect_delay": {
+                "name": "NPU reconnect delay"
+            }
+        }
     }
 }
