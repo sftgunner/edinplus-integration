@@ -12,7 +12,7 @@ from .edinplus import EdinPlusConfig, edinplus_NPU_instance
 
 # List of platforms to support. There should be a matching .py file for each,
 # eg <light.py> and <sensor.py>
-PLATFORMS: list[str] = ["light","switch","button","binary_sensor","scene"]
+PLATFORMS: list[str] = ["sensor","light","switch","button","binary_sensor","scene"]
 
 async def async_setup_entry(hass, entry) -> bool:
     """Set up NPU from config entry."""
