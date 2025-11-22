@@ -4,7 +4,7 @@ DOMAIN = "edinplus"
 
 # DEFAULTS
 DEFAULT_TCP_PORT = 26
-DEFAULT_KEEP_ALIVE_INTERVAL = 10    # seconds;  NPU drops the TCP connection from its side after ~3600s idle
+DEFAULT_KEEP_ALIVE_INTERVAL = 10    # seconds;  How often to poll system to check that the connection is still alive (NB nominal cycle time = interval + timeout); NPU drops the TCP connection from its side after ~3600s idle
 DEFAULT_KEEP_ALIVE_TIMEOUT = 2      # seconds;  How long we wait for a keep-alive ack from the NPU (!OK; response to $OK;) before evaluating whether keep-alive failed
 DEFAULT_MAX_RETRY_ATTEMPTS = 5      # attempts; How many times we will retry keep-alive before assuming connection is lost and attempting TCP reconnect
 
