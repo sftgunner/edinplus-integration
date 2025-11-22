@@ -64,7 +64,7 @@ class EdinPlusConfig:
     keep_alive_interval: int = DEFAULT_KEEP_ALIVE_INTERVAL  # seconds; NPU drops after ~3600s idle
     keep_alive_timeout: int = DEFAULT_KEEP_ALIVE_TIMEOUT
     systeminfo_interval: int = DEFAULT_SYSTEMINFO_INTERVAL
-    reconnect_delay: int = DEFAULT_RECONNECT_DELAY
+    reconnect_delay: int = DEFAULT_MIN_RECONNECT_DELAY
     max_reconnect_delay: int = DEFAULT_MAX_RECONNECT_DELAY
     auto_suggest_areas: bool = True
 
@@ -123,7 +123,7 @@ class edinplus_NPU_instance:
 
         self.online: bool = False
         self.comms_retry_attempts: int = 0
-        self.comms_max_retry_attempts: int = 5
+        self.comms_max_retry_attempts: int = DEFAULT_MAX_RETRY_ATTEMPTS
         self._reconnect_delay: float = config.reconnect_delay
 
         # Timestamp of the last successfully received TCP message from the NPU

@@ -1,18 +1,19 @@
 """Constants for the eDIN+ HomeAssistant integration."""
 
-# Devcodes, product names, status codes etc imported from Gateway Interface v2.0.3 (courtesy of Mode Lighting)
-
 DOMAIN = "edinplus"
 
 # DEFAULTS
 DEFAULT_TCP_PORT = 26
-DEFAULT_KEEP_ALIVE_INTERVAL = 1800  # seconds; NPU drops after ~3600s idle
-DEFAULT_KEEP_ALIVE_TIMEOUT = 5  # seconds
-DEFAULT_SYSTEMINFO_INTERVAL = 600  # seconds
-DEFAULT_RECONNECT_DELAY = 5  # seconds
-DEFAULT_MAX_RECONNECT_DELAY = 300  # seconds
+DEFAULT_KEEP_ALIVE_INTERVAL = 30 # seconds; NPU drops the TCP connection from its side after ~3600s idle
+DEFAULT_KEEP_ALIVE_TIMEOUT = 2 # seconds
+DEFAULT_SYSTEMINFO_INTERVAL = 300  # seconds
+DEFAULT_MIN_RECONNECT_DELAY = 2  # seconds
+DEFAULT_MAX_RECONNECT_DELAY = 60  # seconds
+DEFAULT_MAX_RETRY_ATTEMPTS = 15
 
 EDINPLUS_EVENT = f"{DOMAIN}_event" # Used for button presses (i.e. non-feedback based input from NPU)
+
+# Devcodes, product names, status codes etc imported from Gateway Interface v2.0.3 (courtesy of Mode Lighting)
 
 DEVCODE_TO_PRODCODE = {
     1: "EVO-LCD-55",
