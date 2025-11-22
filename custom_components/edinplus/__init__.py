@@ -25,7 +25,7 @@ async def async_setup_entry(hass, entry) -> bool:
         keep_alive_interval=entry.data.get("keep_alive_interval", DEFAULT_KEEP_ALIVE_INTERVAL),
         keep_alive_timeout=entry.data.get("keep_alive_timeout", DEFAULT_KEEP_ALIVE_TIMEOUT),
         systeminfo_interval=entry.data.get("systeminfo_interval", DEFAULT_SYSTEMINFO_INTERVAL),
-        reconnect_delay=entry.data.get("reconnect_delay", DEFAULT_RECONNECT_DELAY),
+        reconnect_delay=entry.data.get("reconnect_delay", DEFAULT_MIN_RECONNECT_DELAY),
         max_reconnect_delay=entry.data.get("max_reconnect_delay", DEFAULT_MAX_RECONNECT_DELAY),
         auto_suggest_areas=entry.data.get("auto_suggest_areas", True),
     )

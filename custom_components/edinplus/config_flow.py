@@ -28,7 +28,7 @@ DATA_SCHEMA = vol.Schema(
         vol.Optional("keep_alive_interval", default=DEFAULT_KEEP_ALIVE_INTERVAL): int,
         vol.Optional("keep_alive_timeout", default=DEFAULT_KEEP_ALIVE_TIMEOUT): int,
         vol.Optional("systeminfo_interval", default=DEFAULT_SYSTEMINFO_INTERVAL): int,
-        vol.Optional("reconnect_delay", default=DEFAULT_RECONNECT_DELAY): int,
+        vol.Optional("reconnect_delay", default=DEFAULT_MIN_RECONNECT_DELAY): int,
         vol.Optional("max_reconnect_delay", default=DEFAULT_MAX_RECONNECT_DELAY): int,
     }
 )
@@ -64,7 +64,7 @@ async def validate_input(hass: HomeAssistant, data: dict) -> dict[str, Any]:
         keep_alive_interval=data.get("keep_alive_interval", DEFAULT_KEEP_ALIVE_INTERVAL),
         keep_alive_timeout=data.get("keep_alive_timeout", DEFAULT_KEEP_ALIVE_TIMEOUT),
         systeminfo_interval=data.get("systeminfo_interval", DEFAULT_SYSTEMINFO_INTERVAL),
-        reconnect_delay=data.get("reconnect_delay", DEFAULT_RECONNECT_DELAY),
+        reconnect_delay=data.get("reconnect_delay", DEFAULT_MIN_RECONNECT_DELAY),
         max_reconnect_delay=data.get("max_reconnect_delay", DEFAULT_MAX_RECONNECT_DELAY),
     )
     hub = edinplus_NPU_instance(config)
