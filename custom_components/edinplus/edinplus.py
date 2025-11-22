@@ -79,6 +79,7 @@ class edinplus_NPU_instance:
     def __init__(self, config: EdinPlusConfig) -> None:
         hostname = config.hostname
         LOGGER.debug("[%s] Initialising NPU instance", hostname)
+        LOGGER.debug(f"[{hostname}] Configuration: TCP port={config.tcp_port}, use_chan_to_scn_proxy={config.use_chan_to_scn_proxy}, keep_alive_interval={config.keep_alive_interval}, keep_alive_timeout={config.keep_alive_timeout}, systeminfo_interval={config.systeminfo_interval}, reconnect_delay={config.reconnect_delay}, max_reconnect_delay={config.max_reconnect_delay}, auto_suggest_areas={config.auto_suggest_areas}")
 
         self._config: EdinPlusConfig = config
         self._hostname: str = hostname
@@ -128,6 +129,8 @@ class edinplus_NPU_instance:
 
         # Timestamp of the last successfully received TCP message from the NPU
         self.last_message_received: Optional[datetime] = None
+        # Timestamp of the last keep-alive acknowledgement (!OK;) from the NPU
+        self.last_keepalive_ack: Optional[datetime] = None
 
         # Callbacks for button / input events (device automation in HA will
         # subscribe via a thin wrapper but this module stays generic).
@@ -182,12 +185,14 @@ class edinplus_NPU_instance:
         """
 
         if self._monitor_task and not self._monitor_task.done():
+            LOGGER.debug("[%s] NPU monitor already running", self._hostname)
             return
 
         self._stop_event.clear()
         await self._ensure_connected()
 
         loop = asyncio.get_running_loop()
+        LOGGER.debug("[%s] Starting monitor, keep-alive, and systeminfo loops", self._hostname)
         self._monitor_task = loop.create_task(self._monitor_loop(), name=f"edinplus-monitor-{self._hostname}")
         self._keepalive_task = loop.create_task(self._keepalive_loop(), name=f"edinplus-keepalive-{self._hostname}")
         self._systeminfo_task = loop.create_task(self._systeminfo_loop(), name=f"edinplus-systeminfo-{self._hostname}")
@@ -352,54 +357,109 @@ class edinplus_NPU_instance:
     async def _keepalive_loop(self) -> None:
         """Periodic keep-alive that also validates the connection.
 
-        If the keep-alive fails repeatedly, the TCP connection is dropped and a
-        reconnect is scheduled by the monitor loop.
+        Sends keep-alive messages without reading directly from the TCP stream.
+        The monitor loop processes all incoming data including !OK; responses.
+        We validate that an !OK; response is received within the timeout period.
         """
 
         interval = self._config.keep_alive_interval
+        LOGGER.debug("[%s] Keep-alive loop starting with interval=%s", self._hostname, interval)
 
+        if interval <= 0:
+            LOGGER.error("[%s] Invalid keep-alive interval (%s); keep-alive loop disabled", self._hostname, interval)
+            return
+        
         try:
             while not self._stop_event.is_set():
-                await asyncio.wait_for(
-                    self._stop_event.wait(), timeout=interval
-                )
-                if self._stop_event.is_set():
+                try:
+                    await asyncio.wait_for(self._stop_event.wait(), timeout=interval)
+                    # Stop requested while waiting
                     break
+                except asyncio.TimeoutError:
+                    # Normal wake-up after interval expiry
+                    pass
 
                 if not self.online or self.writer is None or self.reader is None:
                     continue
 
+                # Record the time before sending keep-alive
+                keepalive_sent_at = datetime.now(timezone.utc)
+                
                 LOGGER.debug("[%s] Sending TCP keep-alive", self._hostname)
                 try:
+                    # Only send the keep-alive; the monitor loop exclusively owns
+                    # reading from the TCP stream to avoid concurrent reads.
                     await tcp_send_message(self.writer, "$OK;")
-                    output = await asyncio.wait_for(
-                        tcp_receive_message(self.reader),
-                        timeout=self._config.keep_alive_timeout,
-                    )
-                    if output == "":
-                        self.comms_retry_attempts += 1
-                        LOGGER.error(
-                            "[%s] Empty keep-alive response (attempt %s/%s)",
-                            self._hostname,
-                            self.comms_retry_attempts,
-                            self.comms_max_retry_attempts,
-                        )
-                    else:
-                        self.comms_retry_attempts = 0
-                        LOGGER.debug(
-                            "[%s] Keep-alive acknowledged: %s",
-                            self._hostname,
-                            output,
-                        )
-                except (asyncio.TimeoutError, RuntimeError, OSError) as exc:
+                except (RuntimeError, OSError) as exc:
                     self.comms_retry_attempts += 1
                     LOGGER.error(
-                        "[%s] Keep-alive failed (%s) attempt %s/%s",
+                        "[%s] Keep-alive send failed (%s) attempt %s/%s",
                         self._hostname,
                         exc,
                         self.comms_retry_attempts,
                         self.comms_max_retry_attempts,
                     )
+                    
+                    if self.comms_retry_attempts >= self.comms_max_retry_attempts:
+                        LOGGER.warning(
+                            "[%s] Max keep-alive retries reached; dropping TCP connection",
+                            self._hostname,
+                        )
+                        if self.writer is not None:
+                            try:
+                                self.writer.close()
+                                await self.writer.wait_closed()
+                            except Exception:
+                                pass
+                        self.reader = None
+                        self.writer = None
+                        self.online = False
+                        self.comms_retry_attempts = 0
+                    continue
+
+                # Wait for the response to arrive (processed by monitor loop)
+                # Check if we received an !OK; within the timeout period
+                await asyncio.sleep(self._config.keep_alive_timeout)
+                
+                if self.last_keepalive_ack is None:
+                    # No !OK; ever received yet
+                    self.comms_retry_attempts += 1
+                    LOGGER.error(
+                        "[%s] No keep-alive acknowledgement received (attempt %s/%s)",
+                        self._hostname,
+                        self.comms_retry_attempts,
+                        self.comms_max_retry_attempts,
+                    )
+                else:
+                    # Check if the last !OK; was recent enough (after we sent this keep-alive)
+                    time_since_ack = (datetime.now(timezone.utc) - self.last_keepalive_ack).total_seconds()
+                    expected_max_delay = self._config.keep_alive_timeout + 1.0  # Add 1s grace period
+                    
+                    if self.last_keepalive_ack >= keepalive_sent_at:
+                        # Received fresh acknowledgement
+                        self.comms_retry_attempts = 0
+                        LOGGER.debug(
+                            "[%s] Keep-alive acknowledged",
+                            self._hostname,
+                        )
+                    elif time_since_ack <= expected_max_delay:
+                        # Recent enough acknowledgement (from previous keep-alive)
+                        self.comms_retry_attempts = 0
+                        LOGGER.debug(
+                            "[%s] Keep-alive implicitly acknowledged (recent !OK; received %.1fs ago)",
+                            self._hostname,
+                            time_since_ack,
+                        )
+                    else:
+                        # No recent acknowledgement
+                        self.comms_retry_attempts += 1
+                        LOGGER.error(
+                            "[%s] Keep-alive timeout - no !OK; received within %.1fs (attempt %s/%s)",
+                            self._hostname,
+                            self._config.keep_alive_timeout,
+                            self.comms_retry_attempts,
+                            self.comms_max_retry_attempts,
+                        )
 
                 if self.comms_retry_attempts >= self.comms_max_retry_attempts:
                     LOGGER.warning(
@@ -418,6 +478,8 @@ class edinplus_NPU_instance:
                     self.comms_retry_attempts = 0
         except asyncio.CancelledError:  # pragma: no cover - cooperative cancel
             LOGGER.debug("[%s] Keep-alive loop cancelled", self._hostname)
+        except Exception as exc:
+            LOGGER.error("[%s] Keep-alive loop crashed: %r", self._hostname, exc)
 
     async def _systeminfo_loop(self) -> None:
         """Periodically refresh system information and trigger rediscovery."""
@@ -438,6 +500,8 @@ class edinplus_NPU_instance:
                 await self.async_edinplus_check_systeminfo()
         except asyncio.CancelledError:  # pragma: no cover
             LOGGER.debug("[%s] Systeminfo loop cancelled", self._hostname)
+        except Exception as exc:
+            LOGGER.error("[%s] Systeminfo loop crashed: %r", self._hostname, exc)
     
 
     async def async_response_handler(self, response: str) -> None:
@@ -446,7 +510,14 @@ class edinplus_NPU_instance:
         if response != "":
             # Record the time of the last valid message from the NPU
             self.last_message_received = datetime.now(timezone.utc)
-            LOGGER.debug("[%s] TCP RX: %s", self._hostname, response)
+            # LOGGER.debug("[%s] TCP RX: %s", self._hostname, response)
+            
+            # Handle !OK; response (sent as part of keep-alive acknowledgement)
+            if "!OK;" in response:
+                self.last_keepalive_ack = datetime.now(timezone.utc)
+                LOGGER.debug(f"[{self._hostname}] Keep-alive received: {response}")
+                return
+            
             response_type = response.split(',')[0]
             # Parse response and determine what to do with it
             if response_type == "!INPSTATE":
@@ -485,10 +556,6 @@ class edinplus_NPU_instance:
                             "type": newstate,
                         }
                     )
-                # except:
-                #     # This try except was a debugging step due to a small typo in an earlier version of the code - it should be safe to remove/move outside the if else clause
-                #     LOGGER.warning(f"[{self._hostname}] An error occurred when firing event for contact module device {address}-{channel} with trigger type {newstate_numeric}")
-                #     LOGGER.warning(f"[{self._hostname}] Full error: {response}")
 
 
             elif response_type == "!BTNSTATE":
@@ -618,6 +685,8 @@ class edinplus_NPU_instance:
                 await self.async_response_handler(response)
         except asyncio.CancelledError:  # pragma: no cover - cooperative cancel
             LOGGER.debug("[%s] Monitor loop cancelled", self._hostname)
+        except Exception as exc:
+            LOGGER.error("[%s] Monitor loop crashed: %r", self._hostname, exc)
 
 
     async def async_edinplus_discover_channels(self):
