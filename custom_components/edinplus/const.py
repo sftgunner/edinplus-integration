@@ -4,8 +4,13 @@
 
 DOMAIN = "edinplus"
 
-# Default TCP port for eDIN+ NPU communication
+# DEFAULTS
 DEFAULT_TCP_PORT = 26
+DEFAULT_KEEP_ALIVE_INTERVAL = 1800  # seconds; NPU drops after ~3600s idle
+DEFAULT_KEEP_ALIVE_TIMEOUT = 5  # seconds
+DEFAULT_SYSTEMINFO_INTERVAL = 600  # seconds
+DEFAULT_RECONNECT_DELAY = 5  # seconds
+DEFAULT_MAX_RECONNECT_DELAY = 300  # seconds
 
 EDINPLUS_EVENT = f"{DOMAIN}_event" # Used for button presses (i.e. non-feedback based input from NPU)
 

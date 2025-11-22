@@ -61,13 +61,15 @@ class EdinPlusRelayPulseButton(ButtonEntity):
     @property
     def device_info(self) -> DeviceInfo:
         """Return the device info"""
+        # Only return a suggested area if auto_suggest_areas is enabled
+        suggested_area = self._button.area if self._button.hub._config.auto_suggest_areas else None
         return DeviceInfo(
             identifiers={(DOMAIN,self._button.button_id)},
             name=self.name,
             sw_version="1.0.0",
             model=self._button.model,
             manufacturer=self._button.hub.manufacturer,
-            suggested_area=self._button.area,
+            suggested_area=suggested_area,
             via_device=(DOMAIN,self._button.hub._id),
             configuration_url=f"http://{self._button.hub._hostname}",
         )

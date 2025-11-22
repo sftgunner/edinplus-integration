@@ -61,13 +61,15 @@ class EdinPlusSwitchChannel(SwitchEntity):
     @property
     def device_info(self) -> DeviceInfo:
         """Return the device info"""
+        # Only return a suggested area if auto_suggest_areas is enabled
+        suggested_area = self._switch.area if self._switch.hub._config.auto_suggest_areas else None
         return DeviceInfo(
             identifiers={(DOMAIN,self._switch.switch_id)},
             name=self.name,
             sw_version="1.0.0",
             model=self._switch.model,
             manufacturer=self._switch.hub.manufacturer,
-            suggested_area=self._switch.area,
+            suggested_area=suggested_area,
             via_device=(DOMAIN,self._switch.hub._id),
             configuration_url=f"http://{self._switch.hub._hostname}",
         )

@@ -5,8 +5,13 @@
                 "data": {
                     "host": "Hostname (IP address)",
                     "tcp_port": "TCP Port",
-                    "username": "username",
-                    "password": "password"
+                    "use_chan_to_scn_proxy": "Use channel-to-scene proxy",
+                    "keep_alive_interval": "Keep-alive interval (seconds)",
+                    "keep_alive_timeout": "Keep-alive timeout (seconds)",
+                    "systeminfo_interval": "System info interval (seconds)",
+                    "reconnect_delay": "Initial reconnect delay (seconds)",
+                    "max_reconnect_delay": "Max reconnect delay (seconds)",
+                    "auto_suggest_areas": "Automatically suggest and create areas"
                 }
             }
         },
