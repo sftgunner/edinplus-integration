@@ -12,17 +12,26 @@ from homeassistant.core import HomeAssistant
 from .edinplus import edinplus_NPU_instance, EdinPlusConfig
 
 # Import constants
-from .const import DOMAIN, DEFAULT_TCP_PORT
+from .const import *
 
 _LOGGER = logging.getLogger(__name__)
 
 # This is the schema that used to display the UI to the user.
 # At the moment user is asked for the NPU address and TCP port.
 # In future it could be useful to add support for username/password if setup on NPU
-DATA_SCHEMA = vol.Schema({
-    vol.Required("host"): str,
-    vol.Optional("tcp_port", default=DEFAULT_TCP_PORT): int,
-})
+DATA_SCHEMA = vol.Schema(
+    {
+        vol.Required("host"): str,
+        vol.Optional("tcp_port", default=DEFAULT_TCP_PORT): int,
+        vol.Optional("use_chan_to_scn_proxy", default=True): bool,
+        vol.Optional("auto_suggest_areas", default=True): bool,
+        vol.Optional("keep_alive_interval", default=DEFAULT_KEEP_ALIVE_INTERVAL): int,
+        vol.Optional("keep_alive_timeout", default=DEFAULT_KEEP_ALIVE_TIMEOUT): int,
+        vol.Optional("systeminfo_interval", default=DEFAULT_SYSTEMINFO_INTERVAL): int,
+        vol.Optional("reconnect_delay", default=DEFAULT_RECONNECT_DELAY): int,
+        vol.Optional("max_reconnect_delay", default=DEFAULT_MAX_RECONNECT_DELAY): int,
+    }
+)
 
 async def validate_input(hass: HomeAssistant, data: dict) -> dict[str, Any]:
     """Validate the user input allows us to connect.
@@ -47,7 +56,17 @@ async def validate_input(hass: HomeAssistant, data: dict) -> dict[str, Any]:
     # NPU instance is initialised (see edinplus.py for more details)
     # This really ought to go through some verification to ensure the NPU is where it says it is, and supports TCP/HTTP without username/password
     # Have left example code below commented out for reference
-    config = EdinPlusConfig(hostname=data["host"], tcp_port=tcp_port)
+    config = EdinPlusConfig(
+        hostname=data["host"],
+        tcp_port=tcp_port,
+        use_chan_to_scn_proxy=data.get("use_chan_to_scn_proxy", True),
+        auto_suggest_areas=data.get("auto_suggest_areas", True),
+        keep_alive_interval=data.get("keep_alive_interval", DEFAULT_KEEP_ALIVE_INTERVAL),
+        keep_alive_timeout=data.get("keep_alive_timeout", DEFAULT_KEEP_ALIVE_TIMEOUT),
+        systeminfo_interval=data.get("systeminfo_interval", DEFAULT_SYSTEMINFO_INTERVAL),
+        reconnect_delay=data.get("reconnect_delay", DEFAULT_RECONNECT_DELAY),
+        max_reconnect_delay=data.get("max_reconnect_delay", DEFAULT_MAX_RECONNECT_DELAY),
+    )
     hub = edinplus_NPU_instance(config)
     
     # # The dummy hub provides a `test_connection` method to ensure it's working

@@ -16,7 +16,7 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional, Set, Tuple
 
 import aiohttp
 
-from .const import *  # noqa: F401,F403 – re-exported for callers
+from .const import *
 from .scene import edinplus_scene_instance
 
 LOGGER = logging.getLogger(__name__)
@@ -59,14 +59,14 @@ class EdinPlusConfig:
     """Configuration for an NPU connection and polling behaviour."""
 
     hostname: str
-    tcp_port: int = 26
+    tcp_port: int = DEFAULT_TCP_PORT
     use_chan_to_scn_proxy: bool = True
-    keep_alive_interval: float = 1800.0  # seconds; NPU drops after ~3600s idle
-    keep_alive_timeout: float = 5.0
-    systeminfo_interval: float = 600.0
-    reconnect_delay: float = 5.0
-    max_reconnect_delay: float = 300.0
-
+    keep_alive_interval: int = DEFAULT_KEEP_ALIVE_INTERVAL  # seconds; NPU drops after ~3600s idle
+    keep_alive_timeout: int = DEFAULT_KEEP_ALIVE_TIMEOUT
+    systeminfo_interval: int = DEFAULT_SYSTEMINFO_INTERVAL
+    reconnect_delay: int = DEFAULT_RECONNECT_DELAY
+    max_reconnect_delay: int = DEFAULT_MAX_RECONNECT_DELAY
+    auto_suggest_areas: bool = True
 
 class edinplus_NPU_instance:
     """Connection manager for a single eDIN+ NPU.

@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 
 # Import constants
-from .const import DOMAIN
+from .const import *
 
 LOGGER = logging.getLogger(__name__)
 
@@ -17,8 +17,18 @@ PLATFORMS: list[str] = ["sensor","light","switch","button","binary_sensor","scen
 async def async_setup_entry(hass, entry) -> bool:
     """Set up NPU from config entry."""
     # Build a config and hub instance that is HA-agnostic.
-    tcp_port = entry.data.get("tcp_port", 26)  # Default to 26 if not specified
-    config = EdinPlusConfig(hostname=entry.data["host"], tcp_port=tcp_port)
+    tcp_port = entry.data.get("tcp_port", DEFAULT_TCP_PORT)  # Default to 26 if not specified
+    config = EdinPlusConfig(
+        hostname=entry.data["host"],
+        tcp_port=tcp_port,
+        use_chan_to_scn_proxy=entry.data.get("use_chan_to_scn_proxy", True),
+        keep_alive_interval=entry.data.get("keep_alive_interval", DEFAULT_KEEP_ALIVE_INTERVAL),
+        keep_alive_timeout=entry.data.get("keep_alive_timeout", DEFAULT_KEEP_ALIVE_TIMEOUT),
+        systeminfo_interval=entry.data.get("systeminfo_interval", DEFAULT_SYSTEMINFO_INTERVAL),
+        reconnect_delay=entry.data.get("reconnect_delay", DEFAULT_RECONNECT_DELAY),
+        max_reconnect_delay=entry.data.get("max_reconnect_delay", DEFAULT_MAX_RECONNECT_DELAY),
+        auto_suggest_areas=entry.data.get("auto_suggest_areas", True),
+    )
     edinplus_npu = edinplus_NPU_instance(config)
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = edinplus_npu
     

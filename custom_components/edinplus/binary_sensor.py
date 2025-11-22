@@ -55,13 +55,14 @@ class EdinPlusBinarySensor(BinarySensorEntity):
     @property
     def device_info(self) -> DeviceInfo:
         """Match sensor to the input device"""
+        suggested_area = self._binary_sensor.area if self._binary_sensor.hub._config.auto_suggest_areas else None
         return DeviceInfo(
             identifiers={(DOMAIN,self._binary_sensor.sensor_id)},
             name=self.name,
             sw_version="1.0.0",
             model=self._binary_sensor.model,
             manufacturer=self._binary_sensor.hub.manufacturer,
-            suggested_area=self._binary_sensor.area,
+            suggested_area=suggested_area,
             via_device=(DOMAIN,self._binary_sensor.hub._id),
             configuration_url=f"http://{self._binary_sensor.hub._hostname}",
         )
