@@ -488,11 +488,16 @@ class edinplus_NPU_instance:
 
         try:
             while not self._stop_event.is_set():
-                await asyncio.wait_for(
-                    self._stop_event.wait(), timeout=interval
-                )
-                if self._stop_event.is_set():
-                    break
+                try:
+                    await asyncio.wait_for(
+                        self._stop_event.wait(), timeout=interval
+                    )
+                    # Stop requested while waiting
+                    if self._stop_event.is_set():
+                        break
+                except asyncio.TimeoutError:
+                    # Normal wake-up after interval expiry
+                    pass
 
                 if not self.online:
                     continue
@@ -603,7 +608,14 @@ class edinplus_NPU_instance:
                             callback()
                         # light.update_callback()
                         
-                        
+            # elif (response_type == '!INPERR'):
+            #     # Process any errors from the eDIN+ system and pass to the HA logs
+            #     addr = int(response.split(',')[1])
+            #     dev = DEVCODE_TO_PRODNAME[int(response.split(',')[2])]
+            #     chan_num = int(response.split(',')[3])
+            #     statuscode = int(response.split(',')[4].split(';')[0])
+            #     if statuscode != 0:
+            #         LOGGER.warning(f"[{self._hostname}] Module error on input channel number [{chan_num}] (found on device {dev} @ address [{addr}]: {STATUSCODE_TO_SUMMARY[statuscode]} ({STATUSCODE_TO_DESC[statuscode]})")
             elif(response_type == '!MODULEERR'):
                 # Process any errors from the eDIN+ system and pass to the HA logs
                 addr = int(response.split(',')[1])
@@ -621,7 +633,7 @@ class edinplus_NPU_instance:
                 if statuscode != 0:
                     LOGGER.warning(f"[{self._hostname}] Module error on channel number [{chan_num}] (found on device {dev} @ address [{addr}]: {STATUSCODE_TO_SUMMARY[statuscode]} ({STATUSCODE_TO_DESC[statuscode]})")
             elif(response_type == '!OK'):
-                LOGGER.debug(f"[{self._hostname}] NPU acknowledgement: {response}")
+                LOGGER.debug(f"[{self._hostname}] NPU acknowledgement: {response}") # We don't currently do anything with this, but log for debugging. In future maybe track last ack time for keep-alive validation?
             elif(response_type == '!SCNOFF'):
                 LOGGER.debug(f"[{self._hostname}] NPU confirmed scene {response.split(',')[1].split(';')[0]} is now off")
             elif(response_type == '!SCNRECALL'):
