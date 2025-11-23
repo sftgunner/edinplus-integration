@@ -69,18 +69,14 @@ async def validate_input(hass: HomeAssistant, data: dict) -> dict[str, Any]:
     )
     hub = edinplus_NPU_instance(config)
     
-    # # The dummy hub provides a `test_connection` method to ensure it's working
-    # # as expected
-    # result = await hub.test_connection()
-    # if not result:
-    #     # If there is an error, raise an exception to notify HA that there was a
-    #     # problem. The UI will also show there was a problem
-    #     raise CannotConnect
-
-    # If you cannot connect:
-    # throw CannotConnect
-    # If the authentication is wrong:
-    # InvalidAuth
+    # Test connection to ensure NPU is accessible
+    _LOGGER.debug("Testing connection to NPU at %s", data["host"])
+    result = await hub.async_test_connection()
+    if not result:
+        # If there is an error, raise an exception to notify HA that there was a
+        # problem. The UI will also show there was a problem
+        _LOGGER.error("Cannot connect to NPU at %s", data["host"])
+        raise CannotConnect
 
     # Return info that you want to store in the config entry.
     # "Title" is what is displayed to the user for this hub device
