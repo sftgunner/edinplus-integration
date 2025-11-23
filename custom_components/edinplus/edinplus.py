@@ -605,6 +605,7 @@ class edinplus_NPU_instance:
                 newstate = NEWSTATE_TO_BUTTONEVENT[newstate_numeric]
                 uuid = f"edinplus-{self.serial_num}-{address}-{channel}"
                 found_binary_sensor_channel = False
+                binary_sensor_discovery_in_progress = False # Set to false by default to capture case where no binary sensors have been initialised yet
                 for binary_sensor in self.binary_sensors:
                     if binary_sensor.channel == channel and binary_sensor._address == address:
                         found_binary_sensor_channel = True
