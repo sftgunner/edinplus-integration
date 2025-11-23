@@ -391,7 +391,7 @@ class edinplus_NPU_instance:
 
                 if output.rstrip() == "":
                     LOGGER.error(
-                        "[%s] No TCP response from NPU after registration.",
+                        "[%s] No TCP response from NPU after registration. Please restart the NPU (Configuration -> Tools -> Reinitialise system -> Reboot system) if the problem persists.",
                         self._hostname,
                     )
                 elif output.rstrip() == "!GATRDY;":
