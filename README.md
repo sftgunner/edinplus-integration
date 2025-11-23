@@ -2,9 +2,9 @@
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://github.com/hacs/integration)
 
-Tested on HA 2022.12.6 - 2025.7.1 and eDIN+ firmware SW00120.2.4.1.44. 
+Tested on HA 2022.12.6 - 2025.11.0 and eDIN+ firmware SW00120.2.4.1.44 - SW00120.2.4.2.37. 
 
-Please note eDIN+ firmware SW00.120.2.3.x.x is **NOT** currently supported, as it doesn't support device discovery. 
+Please note eDIN+ firmware SW00120.2.3.x.x is **NOT** currently supported, as it doesn't support device discovery. 
 
 You can find your NPU firmware version in "Settings & Upgrades" -> "Upgrade & Backups" -> "Firmware Maintenance". If you are running an older firmware please contact Mode Technical support (see [#11](https://github.com/sftgunner/edinplus-integration/issues/11)).
 
@@ -64,7 +64,7 @@ HomeAssistant will then automatically discover all devices connected to the NPU,
 | DALI Broadcast Module            | DIN-DBM-32-08-PLUS   | :x:                   |
 | 4 Channel Relay Contact Module   | DIN-MSR-05-04-PLUS   | :white_check_mark:    |
 | Input-Output Module              | DIN-INT-00-08-PLUS   | :warning:[^2]         |
-| Universal Ballast Control Module | DIN-UBC-01-05-PLUS   | :warning:[^3]         |
+| Universal Ballast Control Module | DIN-UBC-01-05-PLUS   | :x:         |
 | 4 Port M-BUS Splitter Module     | DIN-MBUS-SPL-04-PLUS | :warning:[^3]         |
 | Mode Sensor                      | DIN-MSENS-RM-T       | :x:                   |
 | Touch Screen 7" Tablet           | DIN-TS-07            | :x:                   |
