@@ -66,7 +66,6 @@ class EdinPlusSwitchChannel(SwitchEntity):
         return DeviceInfo(
             identifiers={(DOMAIN,self._switch.switch_id)},
             name=self.name,
-            sw_version="1.0.0",
             model=self._switch.model,
             manufacturer=self._switch.hub.manufacturer,
             suggested_area=suggested_area,

@@ -66,7 +66,6 @@ class EdinPlusRelayPulseButton(ButtonEntity):
         return DeviceInfo(
             identifiers={(DOMAIN,self._button.button_id)},
             name=self.name,
-            sw_version="1.0.0",
             model=self._button.model,
             manufacturer=self._button.hub.manufacturer,
             suggested_area=suggested_area,

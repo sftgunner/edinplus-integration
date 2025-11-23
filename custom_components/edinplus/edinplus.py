@@ -103,6 +103,7 @@ class edinplus_NPU_instance:
 
         self.manufacturer: str = "Mode Lighting"
         self.model: str = "DIN-NPU-00-01-PLUS"
+        self.tcp_version: Optional[str] = None
         self.serial_num: Optional[str] = None
         self.edit_stamp: Optional[str] = None
         self.adjust_stamp: Optional[str] = None
@@ -223,6 +224,7 @@ class edinplus_NPU_instance:
                 writer.close()
                 await writer.wait_closed()
             except Exception:
+                LOGGER.warning("[%s] Error while closing test TCP connection, skipping close and relying on NPU to terminate", self._hostname)
                 pass
                 
         except asyncio.TimeoutError:
@@ -395,7 +397,7 @@ class edinplus_NPU_instance:
                         self._hostname,
                     )
                 elif output.rstrip() == "!GATRDY;":
-                    LOGGER.info("[%s] TCP connection established successfully", self._hostname)
+                    LOGGER.info("[%s] TCP connection established successfully (GATRDY)", self._hostname)
                     return
                 else:
                     LOGGER.error(
@@ -597,7 +599,13 @@ class edinplus_NPU_instance:
             
             response_type = response.split(',')[0]
             # Parse response and determine what to do with it
-            if response_type == "!INPSTATE":
+            if response_type == "!GATRDY":
+                LOGGER.warning(f"[{self._hostname}] GATRDY received unexpectedly by async_response_handler: {response}")
+            if response_type == "!VERSION":
+                version = response.split(',')[1].split(';')[0]
+                self.tcp_version = version
+                LOGGER.info(f"[{self._hostname}] NPU firmware version: {version}")
+            elif response_type == "!INPSTATE":
                 # !INPSTATE means a contact module press.
                 address = int(response.split(',')[1])
                 channel = int(response.split(',')[3])
