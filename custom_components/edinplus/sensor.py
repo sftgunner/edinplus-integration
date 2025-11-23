@@ -69,8 +69,10 @@ class EdinPlusLastMessageSensor(SensorEntity):
         return DeviceInfo(
             identifiers={(DOMAIN, self._npu._id)},
             name=f"NPU {self._npu._hostname}",
+            sw_version=self._npu.tcp_version,
             manufacturer=self._npu.manufacturer,
             model=self._npu.model,
+            serial_number=self._npu.serial_num,
             configuration_url=f"http://{self._npu._hostname}",
         )
 
@@ -95,8 +97,10 @@ class EdinPlusOnlineSensor(SensorEntity):
         return DeviceInfo(
             identifiers={(DOMAIN, self._npu._id)},
             name=f"NPU {self._npu._hostname}",
+            sw_version=self._npu.tcp_version,
             manufacturer=self._npu.manufacturer,
             model=self._npu.model,
+            serial_number=self._npu.serial_num,
             configuration_url=f"http://{self._npu._hostname}",
         )
 
@@ -121,8 +125,10 @@ class EdinPlusCommsRetrySensor(SensorEntity):
         return DeviceInfo(
             identifiers={(DOMAIN, self._npu._id)},
             name=f"NPU {self._npu._hostname}",
+            sw_version=self._npu.tcp_version,
             manufacturer=self._npu.manufacturer,
             model=self._npu.model,
+            serial_number=self._npu.serial_num,
             configuration_url=f"http://{self._npu._hostname}",
         )
 
@@ -147,7 +153,9 @@ class EdinPlusReconnectDelaySensor(SensorEntity):
         return DeviceInfo(
             identifiers={(DOMAIN, self._npu._id)},
             name=f"NPU {self._npu._hostname}",
+            sw_version=self._npu.tcp_version,
             manufacturer=self._npu.manufacturer,
             model=self._npu.model,
+            serial_number=self._npu.serial_num,
             configuration_url=f"http://{self._npu._hostname}",
         )

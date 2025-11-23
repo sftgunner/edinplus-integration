@@ -59,7 +59,6 @@ class EdinPlusBinarySensor(BinarySensorEntity):
         return DeviceInfo(
             identifiers={(DOMAIN,self._binary_sensor.sensor_id)},
             name=self.name,
-            sw_version="1.0.0",
             model=self._binary_sensor.model,
             manufacturer=self._binary_sensor.hub.manufacturer,
             suggested_area=suggested_area,

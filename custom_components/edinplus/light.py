@@ -67,7 +67,6 @@ class EdinPlusLightChannel(LightEntity):
         return DeviceInfo(
             identifiers={(DOMAIN,self._light.light_id)},
             name=self.name,
-            sw_version="1.0.0",
             model=self._light.model,
             manufacturer=self._light.hub.manufacturer,
             suggested_area=suggested_area,
