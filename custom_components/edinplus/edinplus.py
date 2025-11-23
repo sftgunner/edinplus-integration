@@ -178,6 +178,78 @@ class edinplus_NPU_instance:
     # Lifecycle management
     # ------------------------------------------------------------------
 
+    async def async_test_connection(self) -> bool:
+        """Test connectivity to the NPU via both HTTP and TCP.
+
+        Returns True if both HTTP (port 80) and TCP (configured port) are accessible.
+        Returns False if either connection fails.
+        """
+        
+        # Test HTTP connectivity
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    f"http://{self._hostname}/info?what=names",
+                    timeout=aiohttp.ClientTimeout(total=5)
+                ) as resp:
+                    if resp.status != 200:
+                        LOGGER.error(
+                            "[%s] HTTP connection failed with status %d",
+                            self._hostname,
+                            resp.status,
+                        )
+                        return False
+                    LOGGER.debug("[%s] HTTP connection test successful", self._hostname)
+        except asyncio.TimeoutError:
+            LOGGER.error("[%s] HTTP connection timed out", self._hostname)
+            return False
+        except aiohttp.ClientError as exc:
+            LOGGER.error("[%s] HTTP connection failed: %s", self._hostname, exc)
+            return False
+        except Exception as exc:
+            LOGGER.error("[%s] Unexpected error testing HTTP: %s", self._hostname, exc)
+            return False
+
+        # Test TCP connectivity
+        try:
+            reader, writer = await asyncio.wait_for(
+                asyncio.open_connection(self._hostname, self._tcpport),
+                timeout=5.0
+            )
+            LOGGER.debug("[%s] TCP connection test successful", self._hostname)
+            
+            # Clean up test connection
+            try:
+                writer.close()
+                await writer.wait_closed()
+            except Exception:
+                pass
+                
+        except asyncio.TimeoutError:
+            LOGGER.error(
+                "[%s] TCP connection to port %d timed out",
+                self._hostname,
+                self._tcpport,
+            )
+            return False
+        except OSError as exc:
+            LOGGER.error(
+                "[%s] TCP connection to port %d failed: %s",
+                self._hostname,
+                self._tcpport,
+                exc,
+            )
+            return False
+        except Exception as exc:
+            LOGGER.error(
+                "[%s] Unexpected error testing TCP: %s",
+                self._hostname,
+                exc,
+            )
+            return False
+
+        return True
+
     async def start(self) -> None:
         """Connect to the NPU and start background monitoring.
 

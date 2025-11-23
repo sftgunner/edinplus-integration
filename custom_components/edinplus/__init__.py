@@ -34,6 +34,20 @@ async def async_setup_entry(hass, entry) -> bool:
     
     LOGGER.info(f"[{entry.data['host']}] Setting up eDIN+ NPU")
     
+    # Test connectivity before attempting setup
+    LOGGER.debug(f"[{entry.data['host']}] Testing NPU connectivity (HTTP and TCP)")
+    if not await edinplus_npu.async_test_connection():
+        LOGGER.error(
+            f"[{entry.data['host']}] Failed to connect to NPU - "
+            f"ensure NPU is accessible via HTTP (port 80) and TCP (port {tcp_port})"
+        )
+        raise Exception(
+            f"Cannot connect to eDIN+ NPU at {entry.data['host']}. "
+            f"Please verify the NPU is online and accessible."
+        )
+    
+    LOGGER.debug(f"[{entry.data['host']}] NPU connectivity test passed")
+    
     # Start TCP connection and background monitoring first
     await edinplus_npu.start()
     LOGGER.debug(f"[{entry.data['host']}] TCP connection established")
