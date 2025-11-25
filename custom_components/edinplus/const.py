@@ -84,6 +84,44 @@ STATUSCODE_TO_SUMMARY = {
     26: "DALI missing ballast"
 }
 
+BUTTONPALETTECOLOUR_TO_NAME = {
+    0: "Black",
+    1: "White",
+    2: "Red",
+    3: "Green",
+    4: "Blue",
+    5: "Orange",
+    6: "Cyan",
+    7: "Magenta",
+    8: "Yellow",
+    9: "DimWhite",
+    10: "DimRed",
+    11: "DimGreen",
+    12: "DimBlue",
+    13: "DimOrange",
+    14: "DimCyan",
+    15: "DimMagenta",
+    16: "DimYellow"
+}
+
+COLOURMODE_TO_NAME = {
+    1: "Red",
+    2: "Orange",
+    3: "Yellow",
+    4: "LawnGreen",
+    5: "Green",
+    6: "MintGreen",
+    7: "Cyan",
+    8: "DeepSkyBlue",
+    9: "Blue",
+    10: "Purple",
+    11: "Magenta",
+    12: "DeepPink",
+    13: "User1",
+    14: "User2",
+    15: "User3"
+}
+
 STATUSCODE_TO_DESC = {
     0: "No Errors",
     2: "Device or Module is not responding to MBus messages.",
