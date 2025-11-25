@@ -56,6 +56,22 @@ class EdinPlusBinarySensor(BinarySensorEntity):
     def device_info(self) -> DeviceInfo:
         """Match sensor to the input device"""
         suggested_area = self._binary_sensor.area if self._binary_sensor.hub._config.auto_suggest_areas else None
+        
+        # For wallplate buttons, group them under the wallplate device
+        if hasattr(self._binary_sensor, '_is_wallplate_button') and self._binary_sensor._is_wallplate_button:
+            # Use the wallplate device ID (address-1) instead of the individual button ID
+            wallplate_device_id = f"edinplus-{self._binary_sensor.hub.serial_num}-{self._binary_sensor._address}-1"
+            return DeviceInfo(
+                identifiers={(DOMAIN, wallplate_device_id)},
+                name=f"{self._binary_sensor.area} {self._binary_sensor._wallplate_name} keypad",
+                model=self._binary_sensor.model,
+                manufacturer=self._binary_sensor.hub.manufacturer,
+                suggested_area=suggested_area,
+                via_device=(DOMAIN, self._binary_sensor.hub._id),
+                configuration_url=f"http://{self._binary_sensor.hub._hostname}",
+            )
+        
+        # For regular binary sensors (contact inputs), each is its own device
         return DeviceInfo(
             identifiers={(DOMAIN,self._binary_sensor.sensor_id)},
             name=self.name,
