@@ -692,6 +692,22 @@ class edinplus_NPU_instance:
                 newstate = f"Button {channel} {NEWSTATE_TO_BUTTONEVENT[newstate_numeric]}"
                 uuid = f"edinplus-{self.serial_num}-{address}-1"  # Channel is always 1 in the UUID for a keypad
 
+                # Update binary sensor state for this button
+                # Button is "on" when pressed (newstate_numeric > 0), "off" when released (newstate_numeric == 0)
+                button_is_pressed = (newstate_numeric > 0)
+                for binary_sensor in self.binary_sensors:
+                    if (hasattr(binary_sensor, '_is_wallplate_button') and 
+                        binary_sensor._is_wallplate_button and
+                        binary_sensor._address == address and 
+                        binary_sensor.channel == channel):
+                        LOGGER.debug(
+                            f"[{self._hostname}] Wallplate button {address}-{channel} state updated to {button_is_pressed}"
+                        )
+                        binary_sensor._is_on = button_is_pressed
+                        for callback in binary_sensor._callbacks:
+                            callback()
+                        break
+
                 LOGGER.debug(
                     "[%s] Dispatching keypad event for %s (%s)",
                     self._hostname,
@@ -912,6 +928,22 @@ class edinplus_NPU_instance:
                 input_entity['area'] = plate_area
                 # Keypads can't have names assigned via the eDIN+ interface
                 input_entity['full_name'] = f"{input_entity['area']} {input_entity['name']} keypad" # This needs to be reviewed - a keypad should only appear once, rather than having each individual button listed as a device (although this adds complexity to device_trigger as possible events need to be extended as e.g. Release-off button1, release-off button2 etc)
+                
+                # Create binary sensors for each of the 10 buttons on the wallplate
+                for button_num in range(1, 11):
+                    button_name = f"Button {button_num}"
+                    binary_sensor_instances.append(
+                        edinplus_wallplate_button_binary_sensor_instance(
+                            input_entity['address'],
+                            button_num,
+                            f"{plate_area} {plate_name} {button_name}",
+                            plate_area,
+                            input_entity['model'],
+                            input_entity['devcode'],
+                            self,
+                            plate_name
+                        )
+                    )
             else:
                 # This should probably go through error handling rather than being blindly created, as it's an unknown device, and almost certainly won't work properly with the device trigger
                 input_entity['name'] = input.split(',')[5]
@@ -1113,6 +1145,51 @@ class edinplus_input_binary_sensor_instance:
         await tcp_send_message(self.hub.writer,f"?INP,{self._address},{self._devcode},{self._channel};")
 
     # Register and remove callback functions are from example integration - not sure if still needed
+    def register_callback(self, callback: Callable[[], None]) -> None:
+        """Register callback, called when Button changes state."""
+        self._callbacks.add(callback)
+
+    def remove_callback(self, callback: Callable[[], None]) -> None:
+        """Remove previously registered callback."""
+        self._callbacks.discard(callback)
+
+class edinplus_wallplate_button_binary_sensor_instance:
+    """Binary sensor for individual buttons on a wallplate/keypad."""
+    
+    def __init__(self, address:int, channel: int, name: str, area: str, model: str, devcode: int, npu: edinplus_NPU_instance, wallplate_name: str) -> None:
+        self._address = address
+        self._channel = channel
+        self._id = f"edinplus-{npu.serial_num}-{self._address}-button-{self._channel}" # Use unique ID for each button
+        self.name = name
+        self.hub = npu
+        self._callbacks = set()
+        self._is_on = False  # Buttons default to not pressed
+        self.model = model
+        self.area = area
+        self._devcode = devcode
+        self._is_wallplate_button = True  # Flag to identify this as a wallplate button
+        self._wallplate_name = wallplate_name  # Store wallplate name for device grouping
+
+    @property
+    def channel(self):
+        return self._channel
+
+    @property
+    def sensor_id(self) -> str:
+        """Return ID for binary_sensor."""
+        return self._id
+
+    @property
+    def is_on(self):
+        return self._is_on
+
+    async def tcp_force_state_inform(self):
+        # Wallplate buttons don't have a persistent state query mechanism
+        # They only report state changes via BTNSTATE messages
+        # Set initial state to False (not pressed)
+        LOGGER.debug(f"[{self.hub._hostname}] Wallplate button {self._address}-{self._channel} initialized to not pressed")
+        self._is_on = False
+
     def register_callback(self, callback: Callable[[], None]) -> None:
         """Register callback, called when Button changes state."""
         self._callbacks.add(callback)
