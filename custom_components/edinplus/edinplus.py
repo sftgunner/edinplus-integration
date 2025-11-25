@@ -127,6 +127,8 @@ class edinplus_NPU_instance:
         self.comms_retry_attempts: int = 0
         self.comms_max_retry_attempts: int = DEFAULT_MAX_RETRY_ATTEMPTS
         self._reconnect_delay: float = config.reconnect_delay
+        # Number of consecutive reconnection attempts made by _ensure_connected
+        self.reconnect_attempts: int = 0
 
         # Timestamp of the last successfully received TCP message from the NPU
         self.last_message_received: Optional[datetime] = None
@@ -389,6 +391,8 @@ class edinplus_NPU_instance:
                 self.writer = writer
                 self.online = True
                 self.comms_retry_attempts = 0
+                # Reset reconnect attempts counter on successful connect
+                self.reconnect_attempts = 0
                 self._reconnect_delay = self._config.reconnect_delay
 
                 # Register to receive all events
@@ -411,10 +415,17 @@ class edinplus_NPU_instance:
                     )
             except Exception as exc:  # pragma: no cover - network error path
                 LOGGER.error(
-                    "[%s] Unable to establish TCP connection: %s",
+                    "[%s] Unable to establish TCP connection within (%s)s: %s",
                     self._hostname,
+                    CONNECTION_TEST_TIMEOUT_TCP,
                     exc,
                 )
+
+            # Count this as a reconnection attempt
+            try:
+                self.reconnect_attempts += 1
+            except Exception:
+                self.reconnect_attempts = 1
 
             self.online = False
             LOGGER.info(
