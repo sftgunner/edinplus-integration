@@ -39,6 +39,8 @@ async def async_setup_entry(
             EdinPlusCommsRetrySensor(npu),
             EdinPlusReconnectDelaySensor(npu),
             EdinPlusReconnectAttemptsSensor(npu),
+            EdinPlusEditStampSensor(npu),
+            EdinPlusAdjustStampSensor(npu),
         ]
     )
 
@@ -197,6 +199,70 @@ class EdinPlusReconnectAttemptsSensor(SensorEntity):
     @property
     def native_value(self) -> int:
         return int(self._npu.reconnect_attempts)
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._npu._id)},
+            name=f"NPU {self._npu._hostname}",
+            sw_version=self._npu.tcp_version,
+            manufacturer=self._npu.manufacturer,
+            model=self._npu.model,
+            serial_number=self._npu.serial_num,
+            configuration_url=f"http://{self._npu._hostname}",
+        )
+
+
+class EdinPlusEditStampSensor(SensorEntity):
+    """Diagnostic sensor exposing the NPU configuration edit timestamp."""
+
+    _attr_has_entity_name = True
+
+    def __init__(self, npu) -> None:
+        self._npu = npu
+        self._attr_unique_id = f"{self._npu._id}_edit_stamp"
+        self._attr_translation_key = "npu_edit_stamp"
+        LOGGER.debug("[%s] Initialising NPU edit stamp sensor", self._npu._hostname)
+        
+    @property
+    def entity_category(self):
+        return EntityCategory.DIAGNOSTIC
+
+    @property
+    def native_value(self) -> str | None:
+        return self._npu.edit_stamp
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._npu._id)},
+            name=f"NPU {self._npu._hostname}",
+            sw_version=self._npu.tcp_version,
+            manufacturer=self._npu.manufacturer,
+            model=self._npu.model,
+            serial_number=self._npu.serial_num,
+            configuration_url=f"http://{self._npu._hostname}",
+        )
+
+
+class EdinPlusAdjustStampSensor(SensorEntity):
+    """Diagnostic sensor exposing the NPU configuration adjust timestamp."""
+
+    _attr_has_entity_name = True
+
+    def __init__(self, npu) -> None:
+        self._npu = npu
+        self._attr_unique_id = f"{self._npu._id}_adjust_stamp"
+        self._attr_translation_key = "npu_adjust_stamp"
+        LOGGER.debug("[%s] Initialising NPU adjust stamp sensor", self._npu._hostname)
+        
+    @property
+    def entity_category(self):
+        return EntityCategory.DIAGNOSTIC
+
+    @property
+    def native_value(self) -> str | None:
+        return self._npu.adjust_stamp
 
     @property
     def device_info(self) -> DeviceInfo:
