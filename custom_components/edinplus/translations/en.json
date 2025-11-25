@@ -13,16 +13,29 @@
                     "max_reconnect_delay": "Max reconnect delay (seconds)",
                     "auto_suggest_areas": "Automatically suggest and create areas"
                 }
+            },
+            "reconfigure": {
+                "data": {
+                    "keep_alive_interval": "Keep-alive interval (seconds)",
+                    "keep_alive_timeout": "Keep-alive timeout (seconds)",
+                    "systeminfo_interval": "System info interval (seconds)",
+                    "reconnect_delay": "Initial reconnect delay (seconds)",
+                    "max_reconnect_delay": "Max reconnect delay (seconds)"
+                }
             }
         },
         "error": {
             "cannot_connect": "Cannot connect to device",
             "invalid_auth": "Invalid authentication (username or password incorrect)",
             "invalid_port": "Invalid TCP port (must be between 1 and 65535)",
-            "unknown": "An unknown error occurred"
+            "unknown": "An unknown error occurred",
+            "invalid_number": "Invalid number (must be 0 or greater)",
+            "no_entry": "No existing entry found to reconfigure",
+            "update_failed": "Failed to update configuration"
         },
         "abort": {
-            "already_configured": "This device has already been configured"
+            "already_configured": "This device has already been configured",
+            "reconfigure_successful": "Settings updated successfully"
         }
     },
     "entity": {
