@@ -379,9 +379,12 @@ class edinplus_NPU_instance:
                 self._tcpport,
             )
             try:
-                reader, writer = await asyncio.open_connection(
-                    self._hostname, self._tcpport
+                
+                reader, writer = await asyncio.wait_for(
+                    asyncio.open_connection(self._hostname, self._tcpport),
+                    timeout=CONNECTION_TEST_TIMEOUT_TCP
                 )
+
                 self.reader = reader
                 self.writer = writer
                 self.online = True
