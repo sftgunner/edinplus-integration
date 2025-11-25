@@ -191,7 +191,7 @@ class edinplus_NPU_instance:
             async with aiohttp.ClientSession() as session:
                 async with session.get(
                     f"http://{self._hostname}/info?what=names",
-                    timeout=aiohttp.ClientTimeout(total=5)
+                    timeout=aiohttp.ClientTimeout(total=CONNECTION_TEST_TIMEOUT_HTTP)
                 ) as resp:
                     if resp.status != 200:
                         LOGGER.error(
@@ -215,7 +215,7 @@ class edinplus_NPU_instance:
         try:
             reader, writer = await asyncio.wait_for(
                 asyncio.open_connection(self._hostname, self._tcpport),
-                timeout=5.0
+                timeout=CONNECTION_TEST_TIMEOUT_TCP
             )
             LOGGER.debug("[%s] TCP connection test successful", self._hostname)
             
@@ -259,7 +259,7 @@ class edinplus_NPU_instance:
         """
 
         if self._monitor_task and not self._monitor_task.done():
-            LOGGER.debug("[%s] NPU monitor already running", self._hostname)
+            # LOGGER.debug("[%s] NPU monitor already running", self._hostname)
             return
 
         self._stop_event.clear()
@@ -288,8 +288,9 @@ class edinplus_NPU_instance:
             try:
                 self.writer.close()
                 await self.writer.wait_closed()
-            except Exception:  # pragma: no cover - best-effort close
-                LOGGER.debug("[%s] Error while closing writer", self._hostname)
+            except Exception as exc:  
+                # NB This will result in a zombie connection on the NPU side if not closed properly
+                LOGGER.warning("[%s] Writer object was not closed properly during the stop, this will use up a TCP connection on the NPU. Exception details: %s", self._hostname, exc)
 
         self.reader = None
         self.writer = None
@@ -419,9 +420,14 @@ class edinplus_NPU_instance:
                 self._reconnect_delay,
             )
             try:
+                # Wait for _reconnect_delay seconds or until _stop_event is set (connection has been made)
                 await asyncio.wait_for(self._stop_event.wait(), timeout=self._reconnect_delay)
                 return
             except asyncio.TimeoutError:
+                LOGGER.error(
+                    "[%s] Reconnect delay elapsed, retrying TCP connection",
+                    self._hostname,
+                )
                 pass
 
             self._reconnect_delay = min(

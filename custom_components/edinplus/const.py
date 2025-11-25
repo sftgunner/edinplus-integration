@@ -4,13 +4,17 @@ DOMAIN = "edinplus"
 
 # DEFAULTS
 DEFAULT_TCP_PORT = 26
+
 DEFAULT_KEEP_ALIVE_INTERVAL = 10    # seconds;  How often to poll system to check that the connection is still alive (NB nominal cycle time = interval + timeout); NPU drops the TCP connection from its side after ~3600s idle
 DEFAULT_KEEP_ALIVE_TIMEOUT = 2      # seconds;  How long we wait for a keep-alive ack from the NPU (!OK; response to $OK;) before evaluating whether keep-alive failed
 DEFAULT_MAX_RETRY_ATTEMPTS = 5      # attempts; How many times we will retry keep-alive before assuming connection is lost and attempting TCP reconnect
+DEFAULT_MIN_RECONNECT_DELAY = 60     # seconds; First reconnect is instant, how long to after first reconnect attempt before starting the second. This is doubled after each failed attempt up to max reconnect delay
+DEFAULT_MAX_RECONNECT_DELAY = 180    # seconds; 120s (NPU Idle timeout, configurable) + 60s of retries (6 retries spaced 10 seconds apart)
 
 DEFAULT_SYSTEMINFO_INTERVAL = 300   # seconds;  How often to poll system info from NPU to check whether config has changed (and there might be new devices to discover)
-DEFAULT_MIN_RECONNECT_DELAY = 2     # seconds;  
-DEFAULT_MAX_RECONNECT_DELAY = 60    # seconds;
+
+CONNECTION_TEST_TIMEOUT_HTTP = 5.0  # seconds; Timeout for HTTP connection test during config flow
+CONNECTION_TEST_TIMEOUT_TCP = 5.0   # seconds; Timeout for TCP connection test during config flow
 
 EDINPLUS_EVENT = f"{DOMAIN}_event" # Used for button presses (i.e. non-feedback based input from NPU)
 
