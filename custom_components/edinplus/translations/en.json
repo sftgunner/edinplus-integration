@@ -54,6 +54,12 @@
             },
             "npu_reconnect_attempts": {
                 "name": "NPU TCP reconnect attempts"
+            },
+            "npu_edit_stamp": {
+                "name": "Config edit timestamp"
+            },
+            "npu_adjust_stamp": {
+                "name": "Config adjust timestamp"
             }
         }
     }
