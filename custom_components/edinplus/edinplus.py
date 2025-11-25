@@ -265,7 +265,12 @@ class edinplus_NPU_instance:
             return
 
         self._stop_event.clear()
-        await self._ensure_connected()
+        try:
+            await self._ensure_connected()
+        except asyncio.CancelledError:
+            # Gracefully abort startup if HA cancels setup
+            LOGGER.debug("[%s] Start cancelled before connection established", self._hostname)
+            return
 
         loop = asyncio.get_running_loop()
         LOGGER.debug("[%s] Starting monitor, keep-alive, and systeminfo loops", self._hostname)
@@ -443,6 +448,17 @@ class edinplus_NPU_instance:
                     self._hostname,
                 )
                 pass
+            except asyncio.CancelledError:
+                # HA is shutting down or setup cancelled; stop retry loop quietly
+                LOGGER.debug("[%s] Reconnect wait cancelled; exiting ensure_connected", self._hostname)
+                return
+            except Exception as exc:
+                LOGGER.error(
+                    "[%s] Unexpected error during reconnect wait: %s",
+                    self._hostname,
+                    exc,
+                )
+                return
 
             self._reconnect_delay = min(
                 self._reconnect_delay * 2, self._config.max_reconnect_delay
