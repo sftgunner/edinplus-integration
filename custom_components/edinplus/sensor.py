@@ -37,6 +37,7 @@ async def async_setup_entry(
             EdinPlusOnlineSensor(npu),
             EdinPlusCommsRetrySensor(npu),
             EdinPlusReconnectDelaySensor(npu),
+            EdinPlusReconnectAttemptsSensor(npu),
         ]
     )
 
@@ -57,6 +58,10 @@ class EdinPlusLastMessageSensor(SensorEntity):
         """Ensure state is written promptly when we already have data."""
         if self._npu.last_message_received is not None:
             self.async_write_ha_state()
+            
+    @property
+    def entity_category(self):
+        return EntityCategory.DIAGNOSTIC
 
     @property
     def native_value(self) -> datetime | None:
@@ -89,6 +94,10 @@ class EdinPlusOnlineSensor(SensorEntity):
         LOGGER.debug("[%s] Initialising NPU online sensor", self._npu._hostname)
 
     @property
+    def entity_category(self):
+        return EntityCategory.DIAGNOSTIC
+
+    @property
     def native_value(self) -> str:
         return "online" if self._npu.online else "offline"
 
@@ -117,6 +126,10 @@ class EdinPlusCommsRetrySensor(SensorEntity):
         LOGGER.debug("[%s] Initialising NPU comms retry sensor", self._npu._hostname)
 
     @property
+    def entity_category(self):
+        return EntityCategory.DIAGNOSTIC
+
+    @property
     def native_value(self) -> int:
         return int(self._npu.comms_retry_attempts)
 
@@ -143,10 +156,46 @@ class EdinPlusReconnectDelaySensor(SensorEntity):
         self._attr_unique_id = f"{self._npu._id}_reconnect_delay"
         self._attr_translation_key = "npu_reconnect_delay"
         LOGGER.debug("[%s] Initialising NPU reconnect delay sensor", self._npu._hostname)
+        
+    @property
+    def entity_category(self):
+        return EntityCategory.DIAGNOSTIC
 
     @property
     def native_value(self) -> float:
         return float(self._npu._reconnect_delay)
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._npu._id)},
+            name=f"NPU {self._npu._hostname}",
+            sw_version=self._npu.tcp_version,
+            manufacturer=self._npu.manufacturer,
+            model=self._npu.model,
+            serial_number=self._npu.serial_num,
+            configuration_url=f"http://{self._npu._hostname}",
+        )
+
+
+class EdinPlusReconnectAttemptsSensor(SensorEntity):
+    """Diagnostic sensor exposing number of consecutive TCP reconnection attempts."""
+
+    _attr_has_entity_name = True
+
+    def __init__(self, npu) -> None:
+        self._npu = npu
+        self._attr_unique_id = f"{self._npu._id}_reconnect_attempts"
+        self._attr_translation_key = "npu_reconnect_attempts"
+        LOGGER.debug("[%s] Initialising NPU reconnect attempts sensor", self._npu._hostname)
+        
+    @property
+    def entity_category(self):
+        return EntityCategory.DIAGNOSTIC
+
+    @property
+    def native_value(self) -> int:
+        return int(self._npu.reconnect_attempts)
 
     @property
     def device_info(self) -> DeviceInfo:
