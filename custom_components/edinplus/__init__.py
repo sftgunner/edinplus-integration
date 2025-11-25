@@ -8,6 +8,9 @@ from .const import *
 
 LOGGER = logging.getLogger(__name__)
 
+from homeassistant.const import CONF_DEVICE_ID, CONF_TYPE
+from homeassistant.helpers import device_registry as dr
+
 from .edinplus import EdinPlusConfig, edinplus_NPU_instance
 
 # List of platforms to support. There should be a matching .py file for each,
@@ -60,6 +63,44 @@ async def async_setup_entry(hass, entry) -> bool:
         f"{len(edinplus_npu.binary_sensors)} binary sensors, {len(edinplus_npu.scenes)} scenes"
     )
     LOGGER.debug(f"[{entry.data['host']}] TCP monitoring started")
+
+    # Register callback to bridge NPU button events to Home Assistant event bus
+    async def _handle_button_event(payload: dict) -> None:
+        """Handle button/input events from the NPU and fire them on the HA event bus."""
+        device_uuid = payload.get("device_uuid")
+        event_type = payload.get("type")
+        
+        if not device_uuid or not event_type:
+            LOGGER.warning(
+                f"[{entry.data['host']}] Received incomplete button event: {payload}"
+            )
+            return
+        
+        # Look up the device in the device registry by identifiers
+        device_registry = dr.async_get(hass)
+        device_entry = device_registry.async_get_device(
+            identifiers={(DOMAIN, device_uuid)}
+        )
+        
+        if not device_entry:
+            LOGGER.debug(
+                f"[{entry.data['host']}] Button event for unknown device: {device_uuid}"
+            )
+            return
+        
+        # Fire the event on Home Assistant's event bus
+        event_data = {
+            CONF_DEVICE_ID: device_entry.id,
+            CONF_TYPE: event_type,
+        }
+        hass.bus.fire(EDINPLUS_EVENT, event_data)
+        LOGGER.debug(
+            f"[{entry.data['host']}] Fired {EDINPLUS_EVENT} event: {event_data}"
+        )
+    
+    # Register the callback with the NPU instance
+    edinplus_npu.register_button_event_callback(_handle_button_event)
+    LOGGER.debug(f"[{entry.data['host']}] Button event callback registered")
 
     # This creates each HA object for each platform your device requires (e.g. light, switch)
     # It's done by calling the `async_setup_entry` function in each platform module.
