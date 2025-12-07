@@ -47,7 +47,7 @@
                 "name": "NPU online state"
             },
             "npu_comms_retries": {
-                "name": "NPU failed pings"
+                "name": "NPU communication retries"
             },
             "npu_reconnect_delay": {
                 "name": "NPU reconnect delay"

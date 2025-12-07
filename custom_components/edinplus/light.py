@@ -61,9 +61,9 @@ class EdinPlusLightChannel(LightEntity):
 
     @property
     def device_info(self) -> DeviceInfo:
+        """Return the device info"""
         # Only return a suggested area if auto_suggest_areas is enabled
         suggested_area = self._light.area if self._light.hub._config.auto_suggest_areas else None
-        """Return the device info"""
         return DeviceInfo(
             identifiers={(DOMAIN,self._light.light_id)},
             name=self.name,
