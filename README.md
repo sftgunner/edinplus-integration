@@ -44,12 +44,12 @@ Then add the integration through the integrations page [https://{ip}:8123/config
 | --- | --- | --- |
 |Hostname | IP address (or hostname) of the eDIN+ NPU | |
 |TCP Port | Gateway control port (as found on NPU in Settings -> Network services -> Enable gateway control -> Use port) | 26 |
-|Use channel-to-scene proxy| Whether to try and link channels to scenes to inherit fade | enabled|
+|Use channel-to-scene proxy| Whether to try and link channels to scenes to inherit fade times | enabled|
 |Automatically suggest and create areas | The integration will try and assign Mode devices to areas with the same name as in eDIN+, and will create them in HA if they don't already exist | enabled|
 |Keep-alive interval | How often HA will check that the NPU is still online | 10 |
 |Keep-alive timeout | How long HA will wait for a reply from the NPU when checking it's still online | 2 |
 |System info interval | How often HA will check that no devices have been added/removed from the NPU that it needs to rediscover | 300 |
-|Intial reconnect delay| If a connection is lost, how long will HA wait (minimum) between reconnection attempts | 60† |
+|Initial reconnect delay| If a connection is lost, how long will HA wait (minimum) between reconnection attempts | 60† |
 |Max reconnect delay| If a connection is lost, how long will HA wait (maximum) between reconnection attempts | 180† |
 
 † These settings will depend on whether the NPU has TCP keepalive enabled or disabled. The integration will be able to recover from outages faster with it enabled, but it is classed by Mode Lighting as an "advanced feature". 

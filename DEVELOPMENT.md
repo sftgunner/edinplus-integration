@@ -345,7 +345,7 @@ The NPU instance runs three concurrent background tasks:
 ### 2. Keep-Alive Loop (`_keepalive_loop()`)
 **Purpose**: Prevents TCP connection timeout (NPU closes after ~3600s idle).
 
-**Interval**: 1800 seconds (30 minutes) by default
+**Interval**: 10 seconds by default
 
 **Behavior**:
 - Sends `$OK;` command
@@ -357,7 +357,7 @@ The NPU instance runs three concurrent background tasks:
 ### 3. System Info Loop (`_systeminfo_loop()`)
 **Purpose**: Detects configuration changes and triggers rediscovery.
 
-**Interval**: 600 seconds (10 minutes) by default
+**Interval**: 300 seconds (5 minutes) by default
 
 **Behavior**:
 - Fetches `/info?what=levels` via HTTP

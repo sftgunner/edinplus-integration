@@ -443,7 +443,7 @@ class edinplus_NPU_instance:
                 await asyncio.wait_for(self._stop_event.wait(), timeout=self._reconnect_delay)
                 return
             except asyncio.TimeoutError:
-                LOGGER.error(
+                LOGGER.debug(
                     "[%s] Reconnect delay elapsed, retrying TCP connection",
                     self._hostname,
                 )
@@ -520,6 +520,7 @@ class edinplus_NPU_instance:
                                 self.writer.close()
                                 await self.writer.wait_closed()
                             except Exception:
+                                # Ignore exceptions during writer close; we're already handling a connection failure.
                                 pass
                         self.reader = None
                         self.writer = None
@@ -822,6 +823,7 @@ class edinplus_NPU_instance:
                             self.writer.close()
                             await self.writer.wait_closed()
                         except Exception:
+                            # Ignore errors during writer cleanup; connection is already broken.
                             pass
                     self.reader = None
                     self.writer = None
