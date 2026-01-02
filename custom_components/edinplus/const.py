@@ -105,3 +105,56 @@ STATUSCODE_TO_DESC = {
     25: "A DALI fixture on this channel is indicating a lamp failure condition",
     26: "A DALI fixture that is in the commissioning data is not present (is not responding)."
 }
+
+DEFAULT_COLOUR_PALETTE_NAMES = {
+    0: "Custom",
+    1: "Red",
+    2: "Orange",
+    3: "Yellow",
+    4: "LawnGreen",
+    5: "Green",
+    6: "Mint",
+    7: "Cyan",
+    8: "DeepSkyBlue",
+    9: "Blue",
+    10: "Purple",
+    11: "Magenta",
+    12: "DeepPink",
+    13: "User1",
+    14: "User2",
+    15: "User3",
+    48: "Candlelight",
+    49: "SoftWhite",
+    50: "WarmWhite",
+    51: "Whitelight",
+    52: "CoolWhite",
+    53: "BrightWhite",
+    54: "Daylight",
+    55: "BlueSky"
+}
+
+DEFAULT_COLOUR_PALETTE_VALS = {
+    1: "#FF0000",
+    2: "#FF8000",
+    3: "#FFFF00",
+    4: "#80FF00",
+    5: "#00FF00",
+    6: "#00FF80",
+    7: "#00FFFF",
+    8: "#0080FF",
+    9: "#0000FF",
+    10: "#8000FF",
+    11: "#FF00FF",
+    12: "#FF0080",
+    13: "#000000", # User defined colours default to black
+    14: "#000000",
+    15: "#000000",
+    48: "#1800K", # Tunable white presets
+    49: "#2700K",
+    50: "#3000K",
+    51: "#3500K",
+    52: "#4000K",
+    53: "#5000K",
+    54: "#6000K",
+    55: "#7000K"
+}
