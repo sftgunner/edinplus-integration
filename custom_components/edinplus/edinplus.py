@@ -93,7 +93,7 @@ class edinplus_NPU_instance:
         )  # ``?1`` prevents stripping of ``?``
 
         # Collections populated by discovery
-        self.lights: List[edinplus_dimmer_channel_instance] = []
+        self.lights: List[Any] = []
         # These lists are populated by discovery; typed at runtime to avoid
         # forward-reference issues during module import.
         self.switches: List[Any] = []
@@ -308,11 +308,14 @@ class edinplus_NPU_instance:
         self.areas = await self.async_edinplus_discover_areas()
         # Discover all lighting channels on devices connected to NPU
         (
-            self.lights,
+            dimmer_lights,
+            dmx_lights,
             self.switches,
             self.buttons,
             self.binary_sensors,
         ) = await self.async_edinplus_discover_channels()
+        # Combine all light types
+        self.lights = dimmer_lights + dmx_lights
         # Discover all scenes on the NPU
         self.scenes = await self.async_edinplus_discover_scenes()
         # Search to see if a channel has a unique scene with just it in - if so, toggle that scene rather than the channel (as keeps NPU happier!)
@@ -741,6 +744,205 @@ class edinplus_NPU_instance:
                         for callback in switch._callbacks:
                             callback()
                         # light.update_callback()
+            
+            elif response_type == '!DMXFADE':
+                # !DMXFADE,<addr>,<devcode>,<zone-num>,level,fadetime;
+                LOGGER.debug(f"[{self._hostname}] DMX fade received: {response}")
+                addr = int(response.split(',')[1])
+                devcode = int(response.split(',')[2])
+                channel = int(response.split(',')[3])
+                level = int(response.split(',')[4])
+                
+                for light in self.lights:
+                    if (hasattr(light, 'dmx_type') and 
+                        light._dimmer_address == addr and 
+                        light.channel == channel):
+                        LOGGER.debug(
+                            f"[{self._hostname}] DMX {addr}-{channel} brightness updated to {level}"
+                        )
+                        light._is_on = (level > 0)
+                        light._brightness = level
+                        for callback in light._callbacks:
+                            callback()
+                        break
+            
+            elif response_type == '!DMXRGBCOLRFADE':
+                # !DMXRGBCOLRFADE,<addr>,<devcode>,<zone-num>,preset or #rgb or #wrgb,<fadetime(ms)>;
+                LOGGER.debug(f"[{self._hostname}] DMX RGB color fade received: {response}")
+                addr = int(response.split(',')[1])
+                devcode = int(response.split(',')[2])
+                channel = int(response.split(',')[3])
+                color_or_preset = response.split(',')[4]
+                
+                for light in self.lights:
+                    if (hasattr(light, 'dmx_type') and 
+                        light.dmx_type == "dmxrgbcolr" and
+                        light._dimmer_address == addr and 
+                        light.channel == channel):
+                        
+                        if color_or_preset.startswith('#'):
+                            # Color value - parse hex
+                            hex_color = color_or_preset[1:]  # Remove #
+                            if len(hex_color) == 8:
+                                # #WRGB format
+                                w = int(hex_color[0:2], 16)
+                                r = int(hex_color[2:4], 16)
+                                g = int(hex_color[4:6], 16)
+                                b = int(hex_color[6:8], 16)
+                                light._white_value = w
+                            elif len(hex_color) == 6:
+                                # #RGB format
+                                r = int(hex_color[0:2], 16)
+                                g = int(hex_color[2:4], 16)
+                                b = int(hex_color[4:6], 16)
+                                light._white_value = 0
+                            
+                            light._rgb_color = (r, g, b)
+                            light._preset = 0
+                            LOGGER.debug(
+                                f"[{self._hostname}] DMX RGB {addr}-{channel} "
+                                f"color updated to RGB({r},{g},{b}) W={light._white_value}"
+                            )
+                        else:
+                            # Preset number
+                            preset = int(color_or_preset)
+                            light._preset = preset
+                            # Load RGB from preset if available
+                            if preset in DEFAULT_COLOUR_PALETTE_VALS:
+                                hex_val = DEFAULT_COLOUR_PALETTE_VALS[preset]
+                                if hex_val.startswith('#') and not hex_val.endswith('K'):
+                                    hex_color = hex_val[1:]
+                                    r = int(hex_color[0:2], 16)
+                                    g = int(hex_color[2:4], 16)
+                                    b = int(hex_color[4:6], 16)
+                                    light._rgb_color = (r, g, b)
+                                    light._white_value = 0
+                            LOGGER.debug(
+                                f"[{self._hostname}] DMX RGB {addr}-{channel} "
+                                f"preset updated to {preset}"
+                            )
+                        
+                        for callback in light._callbacks:
+                            callback()
+                        break
+            
+            elif response_type == '!DMXTWCOLRFADE':
+                # !DMXTWCOLRFADE,<addr>,<devcode>,<zone-num>,preset or #<kelvin>K,<fadetime(ms)>;
+                LOGGER.debug(f"[{self._hostname}] DMX TW color fade received: {response}")
+                addr = int(response.split(',')[1])
+                devcode = int(response.split(',')[2])
+                channel = int(response.split(',')[3])
+                temp_or_preset = response.split(',')[4]
+                
+                for light in self.lights:
+                    if (hasattr(light, 'dmx_type') and 
+                        light.dmx_type == "dmxtwcolr" and
+                        light._dimmer_address == addr and 
+                        light.channel == channel):
+                        
+                        if temp_or_preset.startswith('#') and temp_or_preset.endswith('K'):
+                            # Kelvin value - extract number
+                            kelvin = int(temp_or_preset[1:-1])
+                            light._color_temp = kelvin
+                            light._preset = 0
+                            LOGGER.debug(
+                                f"[{self._hostname}] DMX TW {addr}-{channel} "
+                                f"color temp updated to {kelvin}K"
+                            )
+                        else:
+                            # Preset number
+                            preset = int(temp_or_preset)
+                            light._preset = preset
+                            # Load kelvin from preset if available
+                            if preset in DEFAULT_COLOUR_PALETTE_VALS:
+                                temp_val = DEFAULT_COLOUR_PALETTE_VALS[preset]
+                                if temp_val.endswith('K'):
+                                    kelvin = int(temp_val[1:-1])
+                                    light._color_temp = kelvin
+                            LOGGER.debug(
+                                f"[{self._hostname}] DMX TW {addr}-{channel} "
+                                f"preset updated to {preset}"
+                            )
+                        
+                        for callback in light._callbacks:
+                            callback()
+                        break
+            
+            elif response_type == '!DMXRGBCOLR':
+                # !DMXRGBCOLR,<addr>,<devcode>,<zone-num>,<preset>,#<(w)rgb>;
+                # This is the response to ?DMXRGB query
+                LOGGER.debug(f"[{self._hostname}] DMX RGB color state received: {response}")
+                addr = int(response.split(',')[1])
+                devcode = int(response.split(',')[2])
+                channel = int(response.split(',')[3])
+                preset = int(response.split(',')[4])
+                color_hex = response.split(',')[5].split(';')[0]
+                
+                for light in self.lights:
+                    if (hasattr(light, 'dmx_type') and 
+                        light.dmx_type == "dmxrgbcolr" and
+                        light._dimmer_address == addr and 
+                        light.channel == channel):
+                        
+                        light._preset = preset
+                        
+                        # Parse color hex
+                        if color_hex.startswith('#'):
+                            hex_color = color_hex[1:]
+                            if len(hex_color) == 8:
+                                # #WRGB format
+                                w = int(hex_color[0:2], 16)
+                                r = int(hex_color[2:4], 16)
+                                g = int(hex_color[4:6], 16)
+                                b = int(hex_color[6:8], 16)
+                                light._white_value = w
+                            elif len(hex_color) == 6:
+                                # #RGB format
+                                r = int(hex_color[0:2], 16)
+                                g = int(hex_color[2:4], 16)
+                                b = int(hex_color[4:6], 16)
+                                light._white_value = 0
+                            
+                            light._rgb_color = (r, g, b)
+                        
+                        LOGGER.debug(
+                            f"[{self._hostname}] DMX RGB {addr}-{channel} state: "
+                            f"preset={preset}, RGB={light._rgb_color}, W={light._white_value}"
+                        )
+                        for callback in light._callbacks:
+                            callback()
+                        break
+            
+            elif response_type == '!DMXTWCOLR':
+                # !DMXTWCOLR,<addr>,<devcode>,<zone-num>,<preset>,#<kelvin>K;
+                # This is the response to ?DMXTW query
+                LOGGER.debug(f"[{self._hostname}] DMX TW color state received: {response}")
+                addr = int(response.split(',')[1])
+                devcode = int(response.split(',')[2])
+                channel = int(response.split(',')[3])
+                preset = int(response.split(',')[4])
+                temp_str = response.split(',')[5].split(';')[0]
+                
+                for light in self.lights:
+                    if (hasattr(light, 'dmx_type') and 
+                        light.dmx_type == "dmxtwcolr" and
+                        light._dimmer_address == addr and 
+                        light.channel == channel):
+                        
+                        light._preset = preset
+                        
+                        # Parse kelvin value
+                        if temp_str.startswith('#') and temp_str.endswith('K'):
+                            kelvin = int(temp_str[1:-1])
+                            light._color_temp = kelvin
+                        
+                        LOGGER.debug(
+                            f"[{self._hostname}] DMX TW {addr}-{channel} state: "
+                            f"preset={preset}, temp={light._color_temp}K"
+                        )
+                        for callback in light._callbacks:
+                            callback()
+                        break
                         
             # elif (response_type == '!INPERR'):
             #     # Process any errors from the eDIN+ system and pass to the HA logs
@@ -840,6 +1042,7 @@ class edinplus_NPU_instance:
         """Discover channels using the ``info?what=names`` payload."""
 
         dimmer_channel_instances: List[edinplus_dimmer_channel_instance] = []
+        dmx_channel_instances: List[edinplus_dmx_channel_instance] = []
         relay_channel_instances: List[edinplus_relay_channel_instance] = []
         relay_pulse_instances: List[edinplus_relay_pulse_instance] = []
         binary_sensor_instances: List[edinplus_input_binary_sensor_instance] = []
@@ -856,6 +1059,52 @@ class edinplus_NPU_instance:
             # Parsing expected format of Area,AreaNum,AreaName
             areas[int(area.split(',')[1])] = area.split(',')[2]
 
+        # Build a map of DMX channels with their types
+        # Format: DMX,<addr>,<devcode>,<zone-num>,<area>,<name>
+        # Format: DMXRGBCOLR,<addr>,<devcode>,<zone-num>,<area>,<name>
+        # Format: DMXTWCOLR,<addr>,<devcode>,<zone-num>,<area>,<name>
+        dmx_channels = {}  # Key: (addr, devcode, channel), Value: dmx_type
+        
+        dmx_csv = [idx for idx in NPU_data if idx.startswith("DMX")]
+        for dmx_entry in dmx_csv:
+            parts = dmx_entry.split(',')
+            dmx_entry_type = parts[0]
+            addr = int(parts[1])
+            devcode = int(parts[2])
+            channel = int(parts[3])
+            area_num = int(parts[4])
+            name = parts[5] if len(parts) > 5 else ""
+            
+            key = (addr, devcode, channel)
+            
+            if dmx_entry_type == "DMXRGBCOLR":
+                dmx_channels[key] = ("dmxrgbcolr", area_num, name)
+            elif dmx_entry_type == "DMXTWCOLR":
+                dmx_channels[key] = ("dmxtwcolr", area_num, name)
+            elif dmx_entry_type == "DMX":
+                # Only use DMX if not already marked as RGB or TW
+                if key not in dmx_channels:
+                    dmx_channels[key] = ("dmx", area_num, name)
+
+        # Create DMX channel instances
+        for (addr, devcode, channel), (dmx_type, area_num, name) in dmx_channels.items():
+            area = areas.get(area_num, "Unknown Area")
+            model_name = DEVCODE_TO_PRODNAME.get(devcode, f"Unknown Device (DevCode {devcode})")
+            
+            if not name:
+                name = f"Unnamed DMX {dmx_type.upper()} addr {addr} chan {channel}"
+            
+            full_name = f"{area} {name}"
+            
+            dmx_channel_instances.append(
+                edinplus_dmx_channel_instance(
+                    addr, channel, full_name, area, model_name, devcode, self, dmx_type
+                )
+            )
+            LOGGER.debug(
+                f"[{self._hostname}] DMX channel discovered: {full_name} "
+                f"(type: {dmx_type}, addr: {addr}, chan: {channel})"
+            )
 
         # Lighting channels
         channels_csv = [idx for idx in NPU_data if idx.startswith("CHAN")]
@@ -963,8 +1212,13 @@ class edinplus_NPU_instance:
             
             LOGGER.debug(f"[{self._hostname}] Input entity found: {input_entity['model']} '{input_entity['name']}' (id: {input_entity['id']})")
 
-        LOGGER.info(f"[{self._hostname}] Channel discovery completed: {len(dimmer_channel_instances)} dimmers, {len(relay_channel_instances)} relays, {len(relay_pulse_instances)} pulse buttons, {len(binary_sensor_instances)} binary sensors")
-        return dimmer_channel_instances,relay_channel_instances,relay_pulse_instances,binary_sensor_instances
+        LOGGER.info(
+            f"[{self._hostname}] Channel discovery completed: "
+            f"{len(dimmer_channel_instances)} dimmers, {len(dmx_channel_instances)} DMX channels, "
+            f"{len(relay_channel_instances)} relays, {len(relay_pulse_instances)} pulse buttons, "
+            f"{len(binary_sensor_instances)} binary sensors"
+        )
+        return dimmer_channel_instances, dmx_channel_instances, relay_channel_instances, relay_pulse_instances, binary_sensor_instances
 
     async def async_edinplus_discover_areas(self):
         # Discover all areas on the NPU
@@ -1199,6 +1453,184 @@ class edinplus_wallplate_button_binary_sensor_instance:
     def remove_callback(self, callback: Callable[[], None]) -> None:
         """Remove previously registered callback."""
         self._callbacks.discard(callback)
+
+class edinplus_dmx_channel_instance:
+    """DMX channel with dimming support (and optionally RGBW or Tunable White)."""
+    
+    def __init__(self, address: int, channel: int, name: str, area: str, model: str, 
+                 devcode: int, npu: edinplus_NPU_instance, dmx_type: str) -> None:
+        """
+        dmx_type: "dmx" (dimming only), "dmxrgbcolr" (RGBW), or "dmxtwcolr" (tunable white)
+        """
+        self._dimmer_address = address
+        self._channel = channel
+        self._id = f"edinplus-{npu.serial_num}-dmx-{self._dimmer_address}-{self._channel}"
+        self.name = name
+        self.hub = npu
+        self._callbacks = set()
+        self._is_on = None
+        self._brightness = None
+        self.model = model
+        self.area = area
+        self._devcode = devcode
+        self.dmx_type = dmx_type  # "dmx", "dmxrgbcolr", or "dmxtwcolr"
+        
+        # Color attributes for RGB/TW lights
+        self._rgb_color = None  # (r, g, b) tuple for RGB lights
+        self._white_value = None  # White channel value for RGBW
+        self._color_temp = None  # Color temperature in Kelvin for TW lights
+        self._preset = 0  # Current preset number (0 = custom)
+    
+    @property
+    def channel(self):
+        return self._channel
+    
+    @property
+    def light_id(self) -> str:
+        return self._id
+    
+    @property
+    def is_on(self):
+        return self._is_on
+    
+    @property
+    def brightness(self):
+        return self._brightness
+    
+    async def set_brightness(self, intensity: int):
+        """Set brightness level (0-255)."""
+        await tcp_send_message(
+            self.hub.writer,
+            f"$dmxfade,{self._dimmer_address},{self._devcode},{self._channel},{intensity},0;"
+        )
+        LOGGER.debug(
+            f"[{self.hub._hostname}] DMX {self._dimmer_address}-{self._channel} "
+            f"brightness set to {intensity}"
+        )
+        self._is_on = (intensity > 0)
+        self._brightness = intensity
+        # Request feedback to update state
+        await self.tcp_force_state_inform()
+    
+    async def set_rgb_color(self, r: int, g: int, b: int, w: int = 0):
+        """Set RGBW color (RGB values 0-255, W value 0-255)."""
+        if self.dmx_type != "dmxrgbcolr":
+            LOGGER.error(f"[{self.hub._hostname}] Cannot set RGB on non-RGB DMX light")
+            return
+        
+        # Format as #WRGB (8 hex digits) or #RGB (6 hex digits)
+        if w > 0:
+            color_hex = f"#{w:02X}{r:02X}{g:02X}{b:02X}"
+        else:
+            color_hex = f"#{r:02X}{g:02X}{b:02X}"
+        
+        await tcp_send_message(
+            self.hub.writer,
+            f"$dmxrgbcolrfade,{self._dimmer_address},{self._devcode},{self._channel},{color_hex},0;"
+        )
+        LOGGER.debug(
+            f"[{self.hub._hostname}] DMX RGB {self._dimmer_address}-{self._channel} "
+            f"color set to {color_hex}"
+        )
+        self._rgb_color = (r, g, b)
+        self._white_value = w
+        self._preset = 0  # Custom color
+        # Request feedback to update state
+        await self.tcp_force_state_inform()
+    
+    async def set_color_temp(self, kelvin: int):
+        """Set color temperature in Kelvin."""
+        if self.dmx_type != "dmxtwcolr":
+            LOGGER.error(f"[{self.hub._hostname}] Cannot set color temp on non-TW DMX light")
+            return
+        
+        await tcp_send_message(
+            self.hub.writer,
+            f"$DMXTWCOLRFADE,{self._dimmer_address},{self._devcode},{self._channel},#{kelvin}K,0;"
+        )
+        LOGGER.debug(
+            f"[{self.hub._hostname}] DMX TW {self._dimmer_address}-{self._channel} "
+            f"color temp set to {kelvin}K"
+        )
+        self._color_temp = kelvin
+        self._preset = 0  # Custom temperature
+        # Request feedback to update state
+        await self.tcp_force_state_inform()
+    
+    async def set_preset(self, preset_num: int):
+        """Set a preset from the color palette."""
+        if self.dmx_type == "dmxrgbcolr":
+            # RGB preset
+            await tcp_send_message(
+                self.hub.writer,
+                f"$dmxrgbcolrfade,{self._dimmer_address},{self._devcode},{self._channel},{preset_num},0;"
+            )
+            LOGGER.debug(
+                f"[{self.hub._hostname}] DMX RGB {self._dimmer_address}-{self._channel} "
+                f"preset set to {preset_num}"
+            )
+        elif self.dmx_type == "dmxtwcolr":
+            # TW preset
+            await tcp_send_message(
+                self.hub.writer,
+                f"$DMXTWCOLRFADE,{self._dimmer_address},{self._devcode},{self._channel},{preset_num},0;"
+            )
+            LOGGER.debug(
+                f"[{self.hub._hostname}] DMX TW {self._dimmer_address}-{self._channel} "
+                f"preset set to {preset_num}"
+            )
+        
+        self._preset = preset_num
+        # Request feedback to update state
+        await self.tcp_force_state_inform()
+    
+    async def turn_on(self):
+        """Turn on at full brightness."""
+        await self.set_brightness(255)
+    
+    async def turn_off(self):
+        """Turn off."""
+        await self.set_brightness(0)
+    
+    async def tcp_force_state_inform(self):
+        """Request current state from the NPU."""
+        if self.hub.writer is None or not self.hub.online:
+            LOGGER.debug(
+                f"[{self.hub._hostname}] Skipping state request for DMX "
+                f"{self._dimmer_address}-{self._channel} - not connected"
+            )
+            return
+        
+        LOGGER.debug(
+            f"[{self.hub._hostname}] Requesting state for DMX "
+            f"{self._dimmer_address}-{self._channel}"
+        )
+        
+        if self.dmx_type == "dmxrgbcolr":
+            await tcp_send_message(
+                self.hub.writer,
+                f"?DMXRGB,{self._dimmer_address},{self._devcode},{self._channel};"
+            )
+        elif self.dmx_type == "dmxtwcolr":
+            await tcp_send_message(
+                self.hub.writer,
+                f"?DMXTW,{self._dimmer_address},{self._devcode},{self._channel};"
+            )
+        else:
+            # Standard DMX - use CHAN query
+            await tcp_send_message(
+                self.hub.writer,
+                f"?CHAN,{self._dimmer_address},{self._devcode},{self._channel};"
+            )
+    
+    def register_callback(self, callback: Callable[[], None]) -> None:
+        """Register callback, called when light changes state."""
+        self._callbacks.add(callback)
+    
+    def remove_callback(self, callback: Callable[[], None]) -> None:
+        """Remove previously registered callback."""
+        self._callbacks.discard(callback)
+
 
 class edinplus_dimmer_channel_instance:
     # Create a class for a dimmer channel (i.e. variable brightness, but no colour/temperature control)
