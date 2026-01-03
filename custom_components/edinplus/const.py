@@ -130,7 +130,17 @@ DEFAULT_COLOUR_PALETTE_NAMES = {
     52: "CoolWhite",
     53: "BrightWhite",
     54: "Daylight",
-    55: "BlueSky"
+    55: "BlueSky",
+    64: "Long Rainbow Solid",
+    65: "Short Rainbow Solid",
+    66: "Hot Colours Solid",
+    67: "Cold Colours Solid",
+    68: "User Colours Solid",
+    96: "Long Rainbow Ripple",
+    97: "Short Rainbow Ripple",
+    98: "Hot Colours Ripple",
+    99: "Cold Colours Ripple",
+    100: "User Colours Ripple"
 }
 
 DEFAULT_COLOUR_PALETTE_VALS = {
@@ -145,10 +155,7 @@ DEFAULT_COLOUR_PALETTE_VALS = {
     9: "#0000FF",
     10: "#8000FF",
     11: "#FF00FF",
-    12: "#FF0080",
-    13: "#000000", # User defined colours default to black
-    14: "#000000",
-    15: "#000000",
+    12: "#FF0080", # User defined colours not specified here, the NPU must query DMXRGB to get the live value
     48: "#1800K", # Tunable white presets
     49: "#2700K",
     50: "#3000K",

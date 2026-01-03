@@ -52,7 +52,8 @@ class EdinPlusDMXRGBPresetSelector(SelectEntity):
         self._attr_options = []
         for preset_num, preset_name in DEFAULT_COLOUR_PALETTE_NAMES.items():
             if preset_num not in range(48, 56):  # Exclude TW presets
-                self._attr_options.append(preset_name)
+                if preset_num < 64: # Temporarily exclude sequences
+                    self._attr_options.append(preset_name)
         
         LOGGER.debug(
             f"[{self._light.hub._hostname}] Initialising DMX RGB preset selector: "

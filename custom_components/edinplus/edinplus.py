@@ -745,9 +745,9 @@ class edinplus_NPU_instance:
                             callback()
                         # light.update_callback()
             
-            elif response_type == '!DMXFADE':
+            elif (response_type == '!DMXFADE')or(response_type == '!DMXLEVEL'):
                 # !DMXFADE,<addr>,<devcode>,<zone-num>,level,fadetime;
-                LOGGER.debug(f"[{self._hostname}] DMX fade received: {response}")
+                LOGGER.debug(f"[{self._hostname}] DMX fade/level received: {response}")
                 addr = int(response.split(',')[1])
                 devcode = int(response.split(',')[2])
                 channel = int(response.split(',')[3])
@@ -758,7 +758,7 @@ class edinplus_NPU_instance:
                         light._dimmer_address == addr and 
                         light.channel == channel):
                         LOGGER.debug(
-                            f"[{self._hostname}] DMX {addr}-{channel} brightness updated to {level}"
+                            f"[{self._hostname}] DMX {addr}-{channel} ({light._id}) brightness updated to {level}"
                         )
                         light._is_on = (level > 0)
                         light._brightness = level
@@ -1561,9 +1561,13 @@ class edinplus_dmx_channel_instance:
         """Set a preset from the color palette."""
         if self.dmx_type == "dmxrgbcolr":
             # RGB preset
+            if preset_num > 60: # All presets above 60 are animations
+                dmxcommand = "$dmxrgbplayfade"
+            else:
+                dmxcommand = "$dmxrgbcolrfade"
             await tcp_send_message(
                 self.hub.writer,
-                f"$dmxrgbcolrfade,{self._dimmer_address},{self._devcode},{self._channel},{preset_num},0;"
+                f"{dmxcommand},{self._dimmer_address},{self._devcode},{self._channel},{preset_num},0;"
             )
             LOGGER.debug(
                 f"[{self.hub._hostname}] DMX RGB {self._dimmer_address}-{self._channel} "
@@ -1582,6 +1586,7 @@ class edinplus_dmx_channel_instance:
         
         self._preset = preset_num
         # Request feedback to update state
+        await asyncio.sleep(0.01)  # Slight delay to allow NPU to process preset change
         await self.tcp_force_state_inform()
     
     async def turn_on(self):
@@ -1606,22 +1611,11 @@ class edinplus_dmx_channel_instance:
             f"{self._dimmer_address}-{self._channel}"
         )
         
-        if self.dmx_type == "dmxrgbcolr":
-            await tcp_send_message(
-                self.hub.writer,
-                f"?DMXRGB,{self._dimmer_address},{self._devcode},{self._channel};"
-            )
-        elif self.dmx_type == "dmxtwcolr":
-            await tcp_send_message(
-                self.hub.writer,
-                f"?DMXTW,{self._dimmer_address},{self._devcode},{self._channel};"
-            )
-        else:
-            # Standard DMX - use CHAN query
-            await tcp_send_message(
-                self.hub.writer,
-                f"?CHAN,{self._dimmer_address},{self._devcode},{self._channel};"
-            )
+        # Technically if we were only interested in colour we could use ?DMXRGB or ?DMXTW but this way we get brightness too
+        await tcp_send_message(
+            self.hub.writer,
+            f"?DMX,{self._dimmer_address},{self._devcode},{self._channel};"
+        )
     
     def register_callback(self, callback: Callable[[], None]) -> None:
         """Register callback, called when light changes state."""
