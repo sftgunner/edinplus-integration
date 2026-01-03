@@ -2,7 +2,9 @@
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://github.com/hacs/integration)
 
-Tested on HA 2022.12.6 - 2025.11.0 and eDIN+ firmware SW00120.2.4.1.44 - SW00120.2.4.2.37. 
+Tested on HA 2022.12.6 - 2025.11.0 and eDIN+ firmware SW00120.2.4.1.44 - SW00120.2.4.2.51. 
+
+> :warning: There is a known bug in NPU firmware SW00120.2.4.2.37 and older where DMX zones might be "discovered" where there shouldn't be any in reality. Please reach out to Mode Technical support to update your NPU if this is an issue (see [#11](https://github.com/sftgunner/edinplus-integration/issues/11)).
 
 Please note eDIN+ firmware SW00120.2.3.x.x is **NOT** currently supported, as it doesn't support device discovery. 
 
@@ -78,6 +80,7 @@ HomeAssistant will then automatically discover all devices connected to the NPU,
 - Relay contact channels from Relay Module (DIN-MSR-05-04-PLUS) are imported as individual switch entities. The state of these relays can be controlled from this switch entity, or can be temporarily toggled for 1s (pulse) using a "Pulse toggle" button entity in HomeAssistant.
 - Supports multiple NPUs connected to a single HomeAssistant instance (and equally up to 3 HomeAssistant instances are able to access the same NPU).
 - If you have scenes in your NPU that contain a single lighting output channel, turning this light on and off will actually control the scene, rather than the output channel directly. These scenes are termed "Proxy Scenes" within this integration; this ensures better interoperability between the native eDIN+ system and HomeAssistant.
+- Support for dimmable, RGB(W) and Tuneable White DMX lighting through the Input-Output module
 
 ## Compatible modules/controls
 | Device name                      | Model No.            | Supported?            |
@@ -100,7 +103,7 @@ HomeAssistant will then automatically discover all devices connected to the NPU,
 | Contact Input Module             | EVO-INT-CI-xx        | :white_check_mark:    |
 
 [^1]: These aren't officially supported yet as I don't have the hardware to validate with, but functionality should be pretty close to the DIN-02-08-PLUS. If you use this device, it will flag up as a warning in the logs - please open an issue to confirm either that it functions as intended or to report any bugs, and I'll update this page accordingly.
-[^2]: 0-10V output and contact inputs are supported. Output channels will report their state as being "On" or "Off" (i.e. open or closed) using a sensor. DMX outputs are not supported.
+[^2]: 0-10V output, DMX output and contact inputs are supported. Output channels will report their state as being "On" or "Off" (i.e. open or closed) using a sensor. PIRs are not yet supported (see [#43](https://github.com/sftgunner/edinplus-integration/issues/43)).
 [^3]: These modules should not require any extra code to work, but haven't been verified to ensure that they don't cause issues.
 [^4]: Input signals (device triggers) from this device are supported, but there is not currently any support for changing the text or button colour.
 [^5]: Due to limitations of the NPU, all wall plates are assumed to be 10 button. These wall plates include Coolbrium, iCON, Geneva and EVO-Ellipse styles. There is not currently any support for changing the button colour
