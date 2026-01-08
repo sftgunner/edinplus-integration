@@ -70,6 +70,18 @@ NEWSTATE_TO_BUTTONEVENT = {
     6: "Hold-off"
 }
 
+NEWSTATE_TO_PIR_EVENT = {
+    0: "Empty",
+    1: "Triggered-On",
+    2: "Timeout-Off",
+    3: "Set-On",
+    4: "Hold-On",
+    5: "Cleared-Off",
+    6: "Warning-On",
+    7: "Hold-Off"
+    
+}
+
 STATUSCODE_TO_SUMMARY = {
     0: "Status Ok",
     2: "Device missing",

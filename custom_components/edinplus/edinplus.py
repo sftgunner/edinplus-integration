@@ -682,6 +682,43 @@ class edinplus_NPU_instance:
                             "type": newstate,
                         }
                     )
+            elif response_type == "!INPPIR":
+                # !INPPIR means a PIR sensor event.
+                address = int(response.split(',')[1])
+                channel = int(response.split(',')[3])
+                newstate_numeric = int(response.split(',')[4][:3])
+                newstate = NEWSTATE_TO_PIR_EVENT[newstate_numeric]
+                uuid = f"edinplus-{self.serial_num}-{address}-{channel}"
+                found_binary_sensor_channel = False
+                binary_sensor_discovery_in_progress = False # Set to false by default to capture case where no binary sensors have been initialised yet
+                for binary_sensor in self.binary_sensors:
+                    if binary_sensor.channel == channel and binary_sensor._address == address:
+                        found_binary_sensor_channel = True
+                        LOGGER.debug(f"[{self._hostname}] PIR sensor {binary_sensor._address}-{binary_sensor.channel} state updated to {newstate_numeric > 0}")
+                        if (binary_sensor._is_on == None):
+                            binary_sensor_discovery_in_progress = True
+                        else:
+                            binary_sensor_discovery_in_progress = False
+                        
+                        binary_sensor._is_on = (newstate_numeric > 0)
+                        for callback in binary_sensor._callbacks:
+                            callback()
+                if not found_binary_sensor_channel:
+                    LOGGER.warning(f"[{self._hostname}] PIR sensor without corresponding entity found; address {address}, channel {channel}")
+
+                if not binary_sensor_discovery_in_progress:
+                    LOGGER.debug(
+                        "[%s] Dispatching PIR event for %s (%s)",
+                        self._hostname,
+                        uuid,
+                        newstate,
+                    )
+                    await self._dispatch_button_event(
+                        {
+                            "device_uuid": uuid,
+                            "type": newstate,
+                        }
+                    )
 
 
             elif response_type == "!BTNSTATE":
@@ -1134,9 +1171,40 @@ class edinplus_NPU_instance:
             else:
                 LOGGER.warning(f"[{self._hostname}] Incompatible/Unknown output entity of type {DEVCODE_TO_PRODNAME[channel_entity['devcode']]} found in area {channel_entity['area']} as {channel_entity['name']}, channel number {channel_entity['channel']}. Not adding to HomeAssistant")
 
-        # Contact modules
+        # Contact modules and PIR sensors
         inputs_csv = [idx for idx in NPU_data if idx.startswith("INPSTATE")]
+        pir_csv = [idx for idx in NPU_data if idx.startswith("INPPIR")]
         input_entities = []
+        
+        # Process PIR sensors
+        for pir in pir_csv:
+            # Parsing expected format of INPPIR,Address,DevCode,ChanNum,AreaNum,ChanName
+            pir_entity = {}
+            pir_entity['address'] = int(pir.split(',')[1])
+            pir_entity['channel'] = int(pir.split(',')[3])
+            pir_entity['id'] = f"edinplus-{self.serial_num}-{pir_entity['address']}-{pir_entity['channel']}"
+            pir_entity['devcode'] = int(pir.split(',')[2])
+            pir_entity['model'] = DEVCODE_TO_PRODNAME.get(pir_entity['devcode'], "Unknown PIR Sensor")
+            pir_entity['name'] = pir.split(',')[5] if len(pir.split(',')) > 5 else ""
+            if not pir_entity['name']:
+                pir_entity['name'] = f"Unnamed PIR addr {pir_entity['address']} chan {pir_entity['channel']}"
+            pir_entity['area'] = areas[int(pir.split(',')[4])]
+            pir_entity['full_name'] = f"{pir_entity['area']} {pir_entity['name']}"
+            binary_sensor_instances.append(
+                edinplus_input_binary_sensor_instance(
+                    pir_entity['address'],
+                    pir_entity['channel'],
+                    f"{pir_entity['area']} {pir_entity['name']}",
+                    pir_entity['area'],
+                    pir_entity['model'],
+                    pir_entity['devcode'],
+                    self
+                )
+            )
+            input_entities.append(pir_entity)
+            LOGGER.debug(f"[{self._hostname}] PIR sensor found: {pir_entity['model']} '{pir_entity['name']}' (id: {pir_entity['id']})")
+        
+        # Process contact inputs
         for input in inputs_csv:
             # Parsing expected format of Channel,Address,DevCode,ChanNum,AreaNum,ChanName
             input_entity = {}

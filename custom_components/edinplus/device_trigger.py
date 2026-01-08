@@ -42,10 +42,9 @@ for KEYPAD_BUTTON in KEYPAD_BUTTONS:
 
 ALL_TRIGGER_TYPES = TRIGGER_TYPES+KEYPAD_TRIGGER_TYPES
 
-# Limit the devices that can have input events to the button plates (2) and EVO contact input module (9). 
-# This should probably be extended to 15 (the eDIN I/O module) once able to verify functionality with hardware
+# Limit the devices that can have input events to the button plates (2), EVO contact input module (9), I/O module (15), and Multi-sensor PIR (24)
 KEYPAD_INPUT_MODELS = {DEVCODE_TO_PRODNAME[1], DEVCODE_TO_PRODNAME[2]}
-INPUT_MODELS = {DEVCODE_TO_PRODNAME[1],DEVCODE_TO_PRODNAME[2],DEVCODE_TO_PRODNAME[9],DEVCODE_TO_PRODNAME[15]}
+INPUT_MODELS = {DEVCODE_TO_PRODNAME[1],DEVCODE_TO_PRODNAME[2],DEVCODE_TO_PRODNAME[9],DEVCODE_TO_PRODNAME[15],DEVCODE_TO_PRODNAME[24]}
 
 LOGGER = logging.getLogger(__name__)
 
