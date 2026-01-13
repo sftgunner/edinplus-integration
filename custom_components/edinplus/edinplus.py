@@ -719,6 +719,8 @@ class edinplus_NPU_instance:
                             "type": newstate,
                         }
                     )
+                else:
+                    LOGGER.debug(f"[{self._hostname}] PIR sensor {address}-{channel} discovery in progress; suppressing event dispatch")
 
 
             elif response_type == "!BTNSTATE":
