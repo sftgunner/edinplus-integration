@@ -629,7 +629,7 @@ class edinplus_NPU_instance:
         if response != "":
             # Record the time of the last valid message from the NPU
             self.last_message_received = datetime.now(timezone.utc)
-            LOGGER.debug("[%s] TCP RX: %s", self._hostname, response)
+            # LOGGER.debug("[%s] TCP RX: %s", self._hostname, response)
             
             # Handle !OK; response (sent as part of keep-alive acknowledgement)
             if "!OK;" in response:
@@ -719,8 +719,6 @@ class edinplus_NPU_instance:
                             "type": newstate,
                         }
                     )
-                else:
-                    LOGGER.debug(f"[{self._hostname}] PIR sensor {address}-{channel} discovery in progress; suppressing event dispatch")
 
 
             elif response_type == "!BTNSTATE":
