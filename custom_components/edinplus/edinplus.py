@@ -687,7 +687,16 @@ class edinplus_NPU_instance:
                 address = int(response.split(',')[1])
                 channel = int(response.split(',')[3])
                 newstate_numeric = int(response.split(',')[4][:3])
-                newstate = NEWSTATE_TO_PIR_EVENT[newstate_numeric]
+                newstate = NEWSTATE_TO_PIR_EVENT.get(newstate_numeric)
+                if newstate is None:
+                    LOGGER.warning(
+                        "[%s] Unknown PIR state code %s in response: %s",
+                        self._hostname,
+                        newstate_numeric,
+                        response,
+                    )
+                    # Do not crash the TCP handler on unexpected PIR state codes
+                    return
                 uuid = f"edinplus-{self.serial_num}-{address}-{channel}"
                 found_binary_sensor_channel = False
                 binary_sensor_discovery_in_progress = False # Set to false by default to capture case where no binary sensors have been initialised yet
@@ -827,19 +836,34 @@ class edinplus_NPU_instance:
                                 g = int(hex_color[4:6], 16)
                                 b = int(hex_color[6:8], 16)
                                 light._white_value = w
+                                light._rgb_color = (r, g, b)
+                                light._preset = 0
+                                LOGGER.debug(
+                                    f"[{self._hostname}] DMX RGB {addr}-{channel} "
+                                    f"color updated to RGB({r},{g},{b}) W={light._white_value}"
+                                )
                             elif len(hex_color) == 6:
                                 # #RGB format
                                 r = int(hex_color[0:2], 16)
                                 g = int(hex_color[2:4], 16)
                                 b = int(hex_color[4:6], 16)
                                 light._white_value = 0
-                            
-                            light._rgb_color = (r, g, b)
-                            light._preset = 0
-                            LOGGER.debug(
-                                f"[{self._hostname}] DMX RGB {addr}-{channel} "
-                                f"color updated to RGB({r},{g},{b}) W={light._white_value}"
-                            )
+                                light._rgb_color = (r, g, b)
+                                light._preset = 0
+                                LOGGER.debug(
+                                    f"[{self._hostname}] DMX RGB {addr}-{channel} "
+                                    f"color updated to RGB({r},{g},{b}) W={light._white_value}"
+                                )
+                            else:
+                                # Invalid color format; log and ignore to avoid crashes
+                                LOGGER.warning(
+                                    "[%s] DMX RGB %s-%s received invalid color '%s' "
+                                    "(expected 6 or 8 hex chars after '#')",
+                                    self._hostname,
+                                    addr,
+                                    channel,
+                                    color_or_preset,
+                                )
                         else:
                             # Preset number
                             preset = int(color_or_preset)
@@ -933,14 +957,30 @@ class edinplus_NPU_instance:
                                 g = int(hex_color[4:6], 16)
                                 b = int(hex_color[6:8], 16)
                                 light._white_value = w
+                                light._rgb_color = (r, g, b)
                             elif len(hex_color) == 6:
                                 # #RGB format
                                 r = int(hex_color[0:2], 16)
                                 g = int(hex_color[2:4], 16)
                                 b = int(hex_color[4:6], 16)
                                 light._white_value = 0
-                            
-                            light._rgb_color = (r, g, b)
+                                light._rgb_color = (r, g, b)
+                            else:
+                                LOGGER.warning(
+                                    "[%s] Invalid DMX RGB color length for %s-%s: %s",
+                                    self._hostname,
+                                    addr,
+                                    channel,
+                                    color_hex,
+                                )
+                        else:
+                            LOGGER.warning(
+                                "[%s] Invalid DMX RGB color format for %s-%s: %s",
+                                self._hostname,
+                                addr,
+                                channel,
+                                color_hex,
+                            )
                         
                         LOGGER.debug(
                             f"[{self._hostname}] DMX RGB {addr}-{channel} state: "
@@ -1188,7 +1228,7 @@ class edinplus_NPU_instance:
             pir_entity['name'] = pir.split(',')[5] if len(pir.split(',')) > 5 else ""
             if not pir_entity['name']:
                 pir_entity['name'] = f"Unnamed PIR addr {pir_entity['address']} chan {pir_entity['channel']}"
-            pir_entity['area'] = areas[int(pir.split(',')[4])]
+            pir_entity['area'] = areas.get(int(pir.split(',')[4]), "Unknown Area")
             pir_entity['full_name'] = f"{pir_entity['area']} {pir_entity['name']}"
             binary_sensor_instances.append(
                 edinplus_input_binary_sensor_instance(
@@ -1274,7 +1314,7 @@ class edinplus_NPU_instance:
             input_entities.append(input_entity)
 
         for input_entity in input_entities:
-            if input_entity['devcode'] not in [1, 2, 9, 15]:  # Only support LCD wall plate (1), button plates (2), contact input modules (9), and I/O modules (15)
+            if input_entity['devcode'] not in [1, 2, 9, 15, 24]:  # Only support LCD wall plate (1), button plates (2), contact input modules (9), I/O modules (15), and PIR sensors (24)
                 LOGGER.warning(f"[{self._hostname}] Unknown input entity of type {DEVCODE_TO_PRODNAME[input_entity['devcode']]} found in area {input_entity['area']} as {input_entity['name']} with id {input_entity['id']}. Not adding to HomeAssistant.")
                 continue
             

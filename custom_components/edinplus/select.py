@@ -1,12 +1,10 @@
 """Select platform for the eDIN+ HomeAssistant integration."""
 from __future__ import annotations
 
-from typing import Any
-
 import logging
 
 from .edinplus import edinplus_dmx_channel_instance
-from .const import DOMAIN, DEFAULT_COLOUR_PALETTE_NAMES, DEFAULT_COLOUR_PALETTE_VALS
+from .const import DOMAIN, DEFAULT_COLOUR_PALETTE_NAMES
 
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.components.select import SelectEntity

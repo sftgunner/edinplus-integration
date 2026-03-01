@@ -6,7 +6,7 @@ from typing import Any
 import logging
 
 from .edinplus import edinplus_dimmer_channel_instance, edinplus_dmx_channel_instance
-from .const import DOMAIN, DEFAULT_COLOUR_PALETTE_NAMES, DEFAULT_COLOUR_PALETTE_VALS
+from .const import DOMAIN
 
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.components.light import (
