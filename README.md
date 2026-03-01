@@ -93,9 +93,9 @@ HomeAssistant will then automatically discover all devices connected to the NPU,
 | DALI Broadcast Module            | DIN-DBM-32-08-PLUS   | :x:                   |
 | 4 Channel Relay Contact Module   | DIN-MSR-05-04-PLUS   | :white_check_mark:    |
 | Input-Output Module              | DIN-INT-00-08-PLUS   | :warning:[^2]         |
-| Universal Ballast Control Module | DIN-UBC-01-05-PLUS   | :x:         |
+| Universal Ballast Control Module | DIN-UBC-01-05-PLUS   | :x:                   |
 | 4 Port M-BUS Splitter Module     | DIN-MBUS-SPL-04-PLUS | :warning:[^3]         |
-| Mode Sensor                      | DIN-MSENS-RM-T       | :x:                   |
+| Mode Sensor                      | DIN-MSENS-RM-T       | :warning:[^3]         |
 | Touch Screen 7" Tablet           | DIN-TS-07            | :x:                   |
 | Oslo Rotary controls             | DIN-RD-00-xx         | :x:                   |
 | EVO LCD Wall plate               | EVO-LCD-xx           | :white_check_mark:[^4]|
@@ -103,8 +103,8 @@ HomeAssistant will then automatically discover all devices connected to the NPU,
 | Contact Input Module             | EVO-INT-CI-xx        | :white_check_mark:    |
 
 [^1]: These aren't officially supported yet as I don't have the hardware to validate with, but functionality should be pretty close to the DIN-02-08-PLUS. If you use this device, it will flag up as a warning in the logs - please open an issue to confirm either that it functions as intended or to report any bugs, and I'll update this page accordingly.
-[^2]: 0-10V output, DMX output and contact inputs are supported. Output channels will report their state as being "On" or "Off" (i.e. open or closed) using a sensor. PIRs are not yet supported (see [#43](https://github.com/sftgunner/edinplus-integration/issues/43)).
-[^3]: These modules should not require any extra code to work, but haven't been verified to ensure that they don't cause issues.
+[^2]: 0-10V output, DMX output, contact inputs and PIRs are supported. Output channels will report their state as being "On" or "Off" (i.e. open or closed) using a sensor.
+[^3]: These modules should not require any extra code to work, but the hardware hasn't been verified to ensure that there are no issues.
 [^4]: Input signals (device triggers) from this device are supported, but there is not currently any support for changing the text or button colour.
 [^5]: Due to limitations of the NPU, all wall plates are assumed to be 10 button. These wall plates include Coolbrium, iCON, Geneva and EVO-Ellipse styles. There is not currently any support for changing the button colour
 
