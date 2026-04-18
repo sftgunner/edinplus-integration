@@ -115,9 +115,10 @@ async def async_unload_entry(hass, entry) -> bool:
     npu = hass.data[DOMAIN].get(entry.entry_id)
     if npu is not None:
         try:
+            LOGGER.debug(f"[{entry.data['host']}] Stopping NPU instance")
             await npu.stop()
         except Exception:  # best-effort shutdown
-            LOGGER.debug("[%s] Error while stopping NPU instance", entry.data["host"])
+            LOGGER.debug(f"[{entry.data['host']}] Error while stopping NPU instance")
 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:

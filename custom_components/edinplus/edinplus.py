@@ -283,9 +283,18 @@ class edinplus_NPU_instance:
 
         self._stop_event.set()
 
-        for task in (self._monitor_task, self._keepalive_task, self._systeminfo_task):
-            if task is not None:
-                task.cancel()
+        tasks = [
+            t for t in (self._monitor_task, self._keepalive_task, self._systeminfo_task)
+            if t is not None
+        ]
+        for task in tasks:
+            task.cancel()
+
+        # Wait for all tasks to fully terminate before touching the writer,
+        # otherwise a task mid-write can leave the TCP connection in a broken
+        # state on the NPU side (zombie connection).
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
 
         self._monitor_task = None
         self._keepalive_task = None
