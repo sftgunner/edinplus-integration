@@ -24,6 +24,7 @@ async def async_setup_entry(hass, entry) -> bool:
     config = EdinPlusConfig(
         hostname=entry.data["host"],
         tcp_port=tcp_port,
+        tcp_preflight_hold=entry.data.get("tcp_preflight_hold", DEFAULT_TCP_PREFLIGHT_HOLD),
         use_chan_to_scn_proxy=entry.data.get("use_chan_to_scn_proxy", True),
         keep_alive_interval=entry.data.get("keep_alive_interval", DEFAULT_KEEP_ALIVE_INTERVAL),
         keep_alive_timeout=entry.data.get("keep_alive_timeout", DEFAULT_KEEP_ALIVE_TIMEOUT),

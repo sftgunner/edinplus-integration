@@ -60,6 +60,7 @@ class EdinPlusConfig:
 
     hostname: str
     tcp_port: int = DEFAULT_TCP_PORT
+    tcp_preflight_hold: float = DEFAULT_TCP_PREFLIGHT_HOLD
     use_chan_to_scn_proxy: bool = True
     keep_alive_interval: int = DEFAULT_KEEP_ALIVE_INTERVAL  # seconds; NPU drops after ~3600s idle
     keep_alive_timeout: int = DEFAULT_KEEP_ALIVE_TIMEOUT
@@ -220,6 +221,11 @@ class edinplus_NPU_instance:
                 timeout=CONNECTION_TEST_TIMEOUT_TCP
             )
             LOGGER.debug("[%s] TCP connection test successful", self._hostname)
+
+            # Hold briefly before close; some NPUs leave a zombie socket when
+            # the probe connection is opened/closed too quickly.
+            if self._config.tcp_preflight_hold > 0:
+                await asyncio.sleep(self._config.tcp_preflight_hold)
             
             # Clean up test connection
             try:
