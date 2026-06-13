@@ -6,6 +6,7 @@
                     "host": "Hostname (IP address)",
                     "tcp_port": "TCP Port",
                     "use_chan_to_scn_proxy": "Use channel-to-scene proxy",
+                    "tcp_preflight_hold": "TCP connection check length (seconds)",
                     "keep_alive_interval": "Keep-alive interval (seconds)",
                     "keep_alive_timeout": "Keep-alive timeout (seconds)",
                     "systeminfo_interval": "System info interval (seconds)",
