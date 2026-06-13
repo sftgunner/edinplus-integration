@@ -60,6 +60,7 @@ class EdinPlusConfig:
 
     hostname: str
     tcp_port: int = DEFAULT_TCP_PORT
+    tcp_preflight_hold: float = DEFAULT_TCP_PREFLIGHT_HOLD
     use_chan_to_scn_proxy: bool = True
     keep_alive_interval: int = DEFAULT_KEEP_ALIVE_INTERVAL  # seconds; NPU drops after ~3600s idle
     keep_alive_timeout: int = DEFAULT_KEEP_ALIVE_TIMEOUT
@@ -220,6 +221,11 @@ class edinplus_NPU_instance:
                 timeout=CONNECTION_TEST_TIMEOUT_TCP
             )
             LOGGER.debug("[%s] TCP connection test successful", self._hostname)
+
+            # Hold briefly before close; some NPUs leave a zombie socket when
+            # the probe connection is opened/closed too quickly.
+            if self._config.tcp_preflight_hold > 0:
+                await asyncio.sleep(self._config.tcp_preflight_hold)
             
             # Clean up test connection
             try:
@@ -283,9 +289,18 @@ class edinplus_NPU_instance:
 
         self._stop_event.set()
 
-        for task in (self._monitor_task, self._keepalive_task, self._systeminfo_task):
-            if task is not None:
-                task.cancel()
+        tasks = [
+            t for t in (self._monitor_task, self._keepalive_task, self._systeminfo_task)
+            if t is not None
+        ]
+        for task in tasks:
+            task.cancel()
+
+        # Wait for all tasks to fully terminate before touching the writer,
+        # otherwise a task mid-write can leave the TCP connection in a broken
+        # state on the NPU side (zombie connection).
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
 
         self._monitor_task = None
         self._keepalive_task = None

@@ -24,6 +24,7 @@ async def async_setup_entry(hass, entry) -> bool:
     config = EdinPlusConfig(
         hostname=entry.data["host"],
         tcp_port=tcp_port,
+        tcp_preflight_hold=entry.data.get("tcp_preflight_hold", DEFAULT_TCP_PREFLIGHT_HOLD),
         use_chan_to_scn_proxy=entry.data.get("use_chan_to_scn_proxy", True),
         keep_alive_interval=entry.data.get("keep_alive_interval", DEFAULT_KEEP_ALIVE_INTERVAL),
         keep_alive_timeout=entry.data.get("keep_alive_timeout", DEFAULT_KEEP_ALIVE_TIMEOUT),
@@ -115,9 +116,10 @@ async def async_unload_entry(hass, entry) -> bool:
     npu = hass.data[DOMAIN].get(entry.entry_id)
     if npu is not None:
         try:
+            LOGGER.debug(f"[{entry.data['host']}] Stopping NPU instance")
             await npu.stop()
         except Exception:  # best-effort shutdown
-            LOGGER.debug("[%s] Error while stopping NPU instance", entry.data["host"])
+            LOGGER.debug(f"[{entry.data['host']}] Error while stopping NPU instance")
 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:

@@ -15,6 +15,7 @@ DEFAULT_SYSTEMINFO_INTERVAL = 300   # seconds;  How often to poll system info fr
 
 CONNECTION_TEST_TIMEOUT_HTTP = 5.0  # seconds; Timeout for HTTP connection test during config flow
 CONNECTION_TEST_TIMEOUT_TCP = 5.0   # seconds; Timeout for TCP connection test during config flow
+DEFAULT_TCP_PREFLIGHT_HOLD = 0.1    # seconds; Hold test TCP connection briefly before close to avoid NPU zombie sockets on immediate open/close
 
 EDINPLUS_EVENT = f"{DOMAIN}_event" # Used for button presses (i.e. non-feedback based input from NPU)
 

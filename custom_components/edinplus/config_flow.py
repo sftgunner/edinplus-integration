@@ -23,6 +23,7 @@ DATA_SCHEMA = vol.Schema(
     {
         vol.Required("host"): str,
         vol.Optional("tcp_port", default=DEFAULT_TCP_PORT): int,
+        vol.Optional("tcp_preflight_hold", default=DEFAULT_TCP_PREFLIGHT_HOLD): vol.Coerce(float),
         vol.Optional("use_chan_to_scn_proxy", default=True): bool,
         vol.Optional("auto_suggest_areas", default=True): bool,
         vol.Optional("keep_alive_interval", default=DEFAULT_KEEP_ALIVE_INTERVAL): int,
@@ -53,12 +54,17 @@ async def validate_input(hass: HomeAssistant, data: dict) -> dict[str, Any]:
     if not (1 <= tcp_port <= 65535):
         raise InvalidPort
 
+    tcp_preflight_hold = float(data.get("tcp_preflight_hold", DEFAULT_TCP_PREFLIGHT_HOLD))
+    if tcp_preflight_hold < 0:
+        raise InvalidPreflightHold
+
     # NPU instance is initialised (see edinplus.py for more details)
     # This really ought to go through some verification to ensure the NPU is where it says it is, and supports TCP/HTTP without username/password
     # Have left example code below commented out for reference
     config = EdinPlusConfig(
         hostname=data["host"],
         tcp_port=tcp_port,
+        tcp_preflight_hold=tcp_preflight_hold,
         use_chan_to_scn_proxy=data.get("use_chan_to_scn_proxy", True),
         auto_suggest_areas=data.get("auto_suggest_areas", True),
         keep_alive_interval=data.get("keep_alive_interval", DEFAULT_KEEP_ALIVE_INTERVAL),
@@ -118,6 +124,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             except InvalidPort:
                 # Set the error on the `tcp_port` field
                 errors["tcp_port"] = "invalid_port"
+            except InvalidPreflightHold:
+                errors["tcp_preflight_hold"] = "invalid_number"
             except Exception:  # pylint: disable=broad-except
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
@@ -147,6 +155,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Build schema with defaults from existing entry or constants
         defaults = {
+            "tcp_preflight_hold": (entry.data.get("tcp_preflight_hold") if entry else DEFAULT_TCP_PREFLIGHT_HOLD),
             "keep_alive_interval": (entry.data.get("keep_alive_interval") if entry else DEFAULT_KEEP_ALIVE_INTERVAL),
             "keep_alive_timeout": (entry.data.get("keep_alive_timeout") if entry else DEFAULT_KEEP_ALIVE_TIMEOUT),
             "systeminfo_interval": (entry.data.get("systeminfo_interval") if entry else DEFAULT_SYSTEMINFO_INTERVAL),
@@ -156,6 +165,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         schema = vol.Schema(
             {
+                vol.Optional("tcp_preflight_hold", default=defaults["tcp_preflight_hold"]): vol.Coerce(float),
                 vol.Optional("keep_alive_interval", default=defaults["keep_alive_interval"]): int,
                 vol.Optional("keep_alive_timeout", default=defaults["keep_alive_timeout"]): int,
                 vol.Optional("systeminfo_interval", default=defaults["systeminfo_interval"]): int,
@@ -169,6 +179,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             # Basic validation: ensure positive integers and coherent backoff
             try:
+                preflight_hold = float(user_input.get("tcp_preflight_hold", defaults["tcp_preflight_hold"]))
+                if preflight_hold < 0:
+                    errors["tcp_preflight_hold"] = "invalid_number"
+
                 vals: dict[str, int] = {}
                 for key in ("keep_alive_interval", "keep_alive_timeout", "systeminfo_interval", "reconnect_delay", "max_reconnect_delay"):
                     value = int(user_input.get(key))
@@ -184,6 +198,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         errors["base"] = "no_entry"
                     else:
                         new_data = dict(entry.data)
+                        new_data["tcp_preflight_hold"] = preflight_hold
                         for k, v in vals.items():
                             new_data[k] = v
                         # Persist changes to the existing entry
@@ -209,3 +224,7 @@ class InvalidHost(exceptions.HomeAssistantError):
 
 class InvalidPort(exceptions.HomeAssistantError):
     """Error to indicate there is an invalid TCP port."""
+
+
+class InvalidPreflightHold(exceptions.HomeAssistantError):
+    """Error to indicate there is an invalid TCP pre-flight hold value."""
